@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategy Chess - Team Selection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'blue-team': '#3B82F6',
+                        'red-team': '#EF4444',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div id="selection-screen" class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-yellow-400 mb-2">Strategy Chess</h1>
+        </div>
+
+        <!-- Main Selection Area -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- BLUE TEAM (LEFT) -->
+            <div class="bg-blue-900/30 border-2 border-blue-500 rounded-lg p-6">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-blue-400 mb-2">BLUE TEAM</h2>
+                    <input type="text" id="blue-team-name" value="BLUE" 
+                           class="bg-blue-800/50 border border-blue-400 rounded px-3 py-1 text-center text-blue-100 placeholder-blue-300">
+                </div>
+
+                <!-- Hero Selection -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-blue-300 mb-3">Select Hero (Required)</h3>
+                    <div id="blue-hero-selection" class="grid grid-cols-3 gap-3">
+                        <!-- Hero cards will be populated by JavaScript -->
+                    </div>
+                    <div id="blue-hero-selected" class="mt-3 p-3 bg-blue-800/50 rounded hidden">
+                        <!-- Selected hero will be shown here -->
+                    </div>
+                </div>
+
+                <!-- Regular Units Selection -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-blue-300 mb-3">
+                        Select Regular Units (5 required)
+                        <span id="blue-unit-counter" class="text-sm text-blue-200">(0/5)</span>
+                    </h3>
+                    <div id="blue-units-selection" class="grid grid-cols-3 gap-3 mb-3">
+                        <!-- Unit cards will be populated by JavaScript -->
+                    </div>
+                    <div id="blue-units-selected" class="grid grid-cols-5 gap-2">
+                        <!-- Selected units will be shown here -->
+                    </div>
+                </div>
+
+
+            </div>
+
+            <!-- RED TEAM (RIGHT) -->
+            <div class="bg-red-900/30 border-2 border-red-500 rounded-lg p-6">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-red-400 mb-2">RED TEAM</h2>
+                    <input type="text" id="red-team-name" value="RED" 
+                           class="bg-red-800/50 border border-red-400 rounded px-3 py-1 text-center text-red-100 placeholder-red-300">
+                </div>
+
+                <!-- Hero Selection -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-red-300 mb-3">Select Hero (Required)</h3>
+                    <div id="red-hero-selection" class="grid grid-cols-3 gap-3">
+                        <!-- Hero cards will be populated by JavaScript -->
+                    </div>
+                    <div id="red-hero-selected" class="mt-3 p-3 bg-red-800/50 rounded hidden">
+                        <!-- Selected hero will be shown here -->
+                    </div>
+                </div>
+
+                <!-- Regular Units Selection -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-red-300 mb-3">
+                        Select Regular Units (5 required)
+                        <span id="red-unit-counter" class="text-sm text-red-200">(0/5)</span>
+                    </h3>
+                    <div id="red-units-selection" class="grid grid-cols-3 gap-3 mb-3">
+                        <!-- Unit cards will be populated by JavaScript -->
+                    </div>
+                    <div id="red-units-selected" class="grid grid-cols-5 gap-2">
+                        <!-- Selected units will be shown here -->
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+
+        <!-- Global Start Game Button -->
+        <div class="text-center mt-8">
+            <button id="global-start-btn" 
+                    class="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-lg text-xl transition-colors">
+                Start Battle
+            </button>
+        </div>
+    </div>
+
+    <!-- Battle Screen (Hidden by default) -->
+    <div id="battle-screen" class="hidden fixed inset-0 bg-gray-900 z-50">
+        <div class="container mx-auto px-4 py-8">
+            <!-- Battle Header -->
+            <div class="text-center mb-4">
+                <h1 class="text-3xl font-bold text-yellow-400 mb-2">Battle in Progress</h1>
+                <button id="back-to-selection" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                    ← Back to Selection
+                </button>
+            </div>
+            
+            <!-- Battle Canvas Container -->
+            <div class="flex justify-center">
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <canvas id="battle-canvas" width="750" height="600"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="index.js"></script>
+</body>
+</html>

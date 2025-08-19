@@ -1,0 +1,153 @@
+const express = require('express');
+const path = require('path');
+const cors = require('cors');
+
+const app = express();
+const PORT = process.env.PORT || 8000;
+const isDebug = process.argv.includes('--inspect') || process.argv.includes('--inspect-brk');
+
+// Enhanced CORS configuration
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Serve static files with caching disabled for development
+app.use(express.static(__dirname, {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res, path) => {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+}));
+
+// Debug middleware with enhanced logging
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    const method = req.method;
+    const url = req.url;
+    const userAgent = req.get('User-Agent');
+    
+    console.log(`[${timestamp}] ${method} ${url}`);
+    console.log(`   User-Agent: ${userAgent}`);
+    console.log(`   Headers: ${JSON.stringify(req.headers, null, 2)}`);
+    
+    // Log request body for POST/PUT requests
+    if (['POST', 'PUT'].includes(method)) {
+        console.log(`   Body: ${JSON.stringify(req.body, null, 2)}`);
+    }
+    
+    next();
+});
+
+// Main route
+app.get('/', (req, res) => {
+    console.log('Serving index.html');
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Debug API endpoints
+app.get('/api/debug', (req, res) => {
+    const debugInfo = {
+        server: 'Node.js Express Debug Server',
+        timestamp: new Date().toISOString(),
+        debugMode: isDebug,
+        files: {
+            'index.html': require('fs').existsSync(path.join(__dirname, 'index.html')),
+            'index.js': require('fs').existsSync(path.join(__dirname, 'index.js')),
+            'definitions.js': require('fs').existsSync(path.join(__dirname, 'core-logic/definitions.js')),
+            'style.css': require('fs').existsSync(path.join(__dirname, 'style.css'))
+        },
+        directories: {
+            'imgs': require('fs').existsSync(path.join(__dirname, 'imgs')),
+            'core-logic': require('fs').existsSync(path.join(__dirname, 'core-logic'))
+        },
+        environment: {
+            nodeVersion: process.version,
+            platform: process.platform,
+            arch: process.arch,
+            memoryUsage: process.memoryUsage()
+        }
+    };
+    
+    res.json(debugInfo);
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Error occurred:', err);
+    console.error('Stack trace:', err.stack);
+    
+    res.status(500).json({
+        error: err.message,
+        stack: isDebug ? err.stack : undefined,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log(`404 - File not found: ${req.url}`);
+    res.status(404).json({
+        error: 'File not found',
+        path: req.url,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log('='.repeat(50));
+    console.log('🚀 Strategy Chess Debug Server');
+    console.log('='.repeat(50));
+    console.log(`🌐 URL: http://localhost:${PORT}`);
+    console.log(`📁 Static files: ${__dirname}`);
+    console.log(`🔧 Debug mode: ${isDebug ? 'ENABLED' : 'DISABLED'}`);
+    console.log(`🌐 CORS: ENABLED for all origins`);
+    
+    if (isDebug) {
+        console.log('🐛 Debugger available at: chrome://inspect');
+        console.log('💡 Use Chrome DevTools to debug JavaScript');
+    }
+    
+    console.log('📝 API Endpoints:');
+    console.log(`   GET /api/debug - Debug information`);
+    console.log(`   GET /api/health - Health check`);
+    console.log('');
+    console.log('Press Ctrl+C to stop the server');
+    console.log('='.repeat(50));
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    process.exit(0);
+});
+
+// Unhandled promise rejection handler
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Uncaught exception handler
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+}); 
