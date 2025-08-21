@@ -18,9 +18,16 @@ export class RangerStrategy extends BaseStrategy {
 
     evaluatePosition(unit, row, col) {
         let score = 0;
+        
+        let isAdjacentPenalty = false;
+        // kiểm tra xem có đang bị effect của ADJACENT_PENALTY không
+        if (unit.abilities.includes(ADJACENT_PENALTY)) {
+            isAdjacentPenalty = true;
+        }
+
         // nếu ô (row, col) có target
         const targets = this._getAttackableTargets(unit, row, col);
-        if (targets.length > 0) {            
+        if (targets.length > 0 && !isAdjacentPenalty) {            
             score += this._calculateAttackScore(unit, targets);
         } 
 
