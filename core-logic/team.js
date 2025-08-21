@@ -13,6 +13,12 @@ class Team {
     removeUnit(unit) {
         this.units = this.units.filter(u => u.id !== unit.id);
     }
+
+    clone() {
+        const newTeam = new Team(this.teamId, this.teamName);
+        newTeam.units = this.units.map(unit => unit.clone());
+        return newTeam;
+    }
 }
 
 export default Team;

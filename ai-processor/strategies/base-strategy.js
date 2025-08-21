@@ -1,4 +1,5 @@
 import { ADJACENT_PENALTY } from "../../core-logic/definitions.js";
+import GameLogic from "../../core-logic/game-logic.js";
 
 export class BaseStrategy {
     constructor(gameLogic) {
@@ -42,10 +43,18 @@ export class BaseStrategy {
             if (enemy.effects.includes(ADJACENT_PENALTY)) {
                 continue;
             }
+
+            // kiếm tra nếu enemy đó bị dính adjacent penalty nếu unit đó đứng ở vị trí row, col
+            if (enemy.abilities.includes(ADJACENT_PENALTY)) {
+                if (this.gameLogic._getManhattanDistance({ row, col }, enemy) === 1) {
+                    continue; 
+                }
+            }
             
-            const enemyReachableCells = this.gameLogic.getReachableCells(enemy);
+            const gameLogicCopy = this._simulateMoveState(unit, row, col);
+            const enemyReachableCells = gameLogicCopy.getReachableCells(enemy);
             for (const cell of enemyReachableCells) {
-                if (this.gameLogic._getManhattanDistance({ row, col }, cell) <= enemy.range) {
+                if (gameLogicCopy._getManhattanDistance({ row, col }, cell) <= enemy.range) {
                     threatCount++;
                     break;
                 }
@@ -83,5 +92,49 @@ export class BaseStrategy {
     evaluatePosition(unit, row, col) {
         // Default implementation - subclasses should override this
         return 0;
+    }
+
+    chooseBestTarget(unit, row, col) {
+        const attackableTargets = this._getAttackableTargets(unit, row, col);
+        if (attackableTargets.length === 0) {
+            return null;
+        }
+
+        let bestTarget = null;  // target có score cao nhất
+        let bestScore = 0;
+        for (const target of attackableTargets) {
+            const score = this.attackBonusTable[target.armyType];
+
+            // ưu tiên tấn công quân có hp = 1 để diệt bớt attack turn của địch
+            if (target.hp === 1) {
+                score += 10;
+            }
+
+            // ưu tiên tấn công quân có speed cao hơn unit hiện tại nếu unit hiện tại bị effect của ADJACENT_PENALTY
+            if (unit.abilities.includes(ADJACENT_PENALTY) && target.speed > unit.speed) {
+                score += 5;
+            }
+
+            // chọn target có score cao nhất
+            if (score > bestScore) {
+                bestScore = score;
+                bestTarget = target;
+            }
+        }
+
+        return bestTarget;
+    }
+
+    _simulateMoveState(unit, row, col) {
+        // tạo ra một bản sao của trạng thái bàn cờ hiện tại của game 
+        // bằng cách tạo ra một bản sao của gameLogic
+        // và sửa đổi vị trí của unit hiện tại thành row, col
+        // sau đó trả về trạng thái bàn cờ mới
+        const matchInfoCopy = this.gameLogic.matchInfo.clone();
+        const gameLogicCopy = new GameLogic(matchInfoCopy);
+        const unitCopy = gameLogicCopy._getAllUnits().filter(u => u.id === unit.id)[0];
+        unitCopy.row = row;
+        unitCopy.col = col;
+        return gameLogicCopy;
     }
 } 

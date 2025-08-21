@@ -49,18 +49,31 @@ export class RangerStrategy extends BaseStrategy {
     _getAdjacentThreats(unit, row, col) {
         const enemies = this._getEnemies(unit);
         let adjacentThreats = [];
-        // tìm tất cả quân thù mà có khoảng cách Manhattan đến ô (row, col) nhỏ hơn hoặc bằng 1
         for (const enemy of enemies) {
-            const enemyReachableCells = this.gameLogic.getReachableCells(enemy);
+            const gameLogicCopy = this._simulateMoveState(enemy, row, col);
+            const enemyReachableCells = gameLogicCopy.getReachableCells(enemy);
             // nếu enemyReachableCells tồn tại 1 ô có khoảng cách Manhattan đến ô (row, col) nhỏ hơn hoặc bằng 1
             // thì thêm enemy vào adjacentThreats
             for (const cell of enemyReachableCells) {
                 if (this.gameLogic._getManhattanDistance({ row, col }, cell) <= 1) {
                     adjacentThreats.push(enemy);
                     break;
-                }
+                } 
             }
         }
+
+        // tìm trong adjacentThreats có quân nào có speed cao hơn unit hiện tại và còn 1 hp không, 
+        // nếu có thì loại bỏ quân ấy đi, và chỉ loại đúng 1 quân mà thôi 
+        // vì ta giả định rằng quân ấy sẽ bị giết ngay lập tức        
+        // và một giả định nữa là sẽ tồn tại một vị trí mà các threat khác không thể đến được vì speed chậm hơn hoặc bằng unit hiện tại
+        // điều này giúp cho quân đội sẽ ra quyết định hiếu chiến hơn thay vì bỏ chạy
+        for (const threat of adjacentThreats) {
+            if (threat.speed > unit.speed && threat.hp === 1) {
+                adjacentThreats.splice(adjacentThreats.indexOf(threat), 1);
+                break;
+            }
+        }
+
         return adjacentThreats;
     }
 } 

@@ -186,6 +186,13 @@ class Unit {
         unit.abilities = UNIT_TYPES.Base.abilities;
         return unit;
     }
+
+    clone() {
+        const newUnit = new Unit(this.armyType, this.id, this.teamId, this.name, this.row, this.col, this.hp, this.speed, this.range, this.magicRange);
+        newUnit.abilities = [...this.abilities];
+        newUnit.effects = [...this.effects];
+        return newUnit;
+    }
 }
 
 export default Unit;

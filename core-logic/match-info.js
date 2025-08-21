@@ -80,6 +80,14 @@ class MatchInfo {
             }
         }
     }
+
+    clone() { 
+        const newMatch = new MatchInfo(this.matchId, this.matchName, this.team1.clone(), this.team2.clone());
+        newMatch.winner = this.winner;
+        newMatch.loser = this.loser;
+        newMatch.state = this.state;
+        return newMatch;
+    }
 }
 
 export default MatchInfo;
