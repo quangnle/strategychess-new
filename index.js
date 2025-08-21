@@ -1,6 +1,6 @@
 // Import modules
 let UNIT_TYPES = null;
-let BattleGraphics = null;
+let P5BattleGraphics = null;
 
 // Load definitions and graphics
 async function loadDefinitions() {
@@ -9,10 +9,10 @@ async function loadDefinitions() {
         UNIT_TYPES = module.UNIT_TYPES;
         console.log('Definitions loaded successfully:', Object.keys(UNIT_TYPES));
         
-        // Load graphics module
-        const graphicsModule = await import('./graphics.js');
-        BattleGraphics = graphicsModule.default;
-        console.log('Graphics module loaded successfully');
+        // Load p5 graphics module
+        const graphicsModule = await import('./p5-battle-sketch.js');
+        P5BattleGraphics = graphicsModule.default;
+        console.log('P5 Graphics module loaded successfully');
     } catch (error) {
         console.error('Error loading modules:', error);
         // Fallback to basic structure
@@ -383,25 +383,19 @@ function showSelectionScreen() {
 let battleGraphics = null;
 
 function initializeBattleGraphics(matchInfo) {
-    const canvas = document.getElementById('battle-canvas');
-    if (!canvas) {
-        console.error('Battle canvas not found');
-        return;
-    }
-    
-    if (!BattleGraphics) {
-        console.error('BattleGraphics not loaded');
+    if (!P5BattleGraphics) {
+        console.error('P5BattleGraphics not loaded');
         return;
     }
     
     try {
-        battleGraphics = new BattleGraphics(canvas, matchInfo);
-        console.log('Battle graphics initialized successfully');
+        battleGraphics = new P5BattleGraphics(matchInfo);
+        console.log('P5 Battle graphics initialized successfully');
         
         // Add game controls
         addGameControls();
     } catch (error) {
-        console.error('Error initializing battle graphics:', error);
+        console.error('Error initializing P5 battle graphics:', error);
     }
 }
 

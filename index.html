@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strategy Chess - Team Selection</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -123,7 +124,7 @@
             <!-- Battle Canvas Container -->
             <div class="flex justify-center">
                 <div class="bg-gray-800 p-4 rounded-lg">
-                    <canvas id="battle-canvas" width="750" height="600"></canvas>
+                    <div id="battle-canvas-container"></div>
                 </div>
             </div>
         </div>

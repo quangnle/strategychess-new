@@ -1,4 +1,5 @@
 import { BaseStrategy } from "./base-strategy.js";
+import { ADJACENT_PENALTY } from "../../core-logic/definitions.js";
 
 export class RangerStrategy extends BaseStrategy {
 

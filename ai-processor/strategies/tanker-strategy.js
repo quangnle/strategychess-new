@@ -1,3 +1,4 @@
+import { UNIT_TYPES } from "../../core-logic/definitions.js";
 import { BaseStrategy } from "./base-strategy.js";
 
 export class TankerStrategy extends BaseStrategy {
@@ -44,7 +45,7 @@ export class TankerStrategy extends BaseStrategy {
         // TH 3: nếu tân công được và đồng thời cũng có thể sacrifice
         if (attackableTargets.length > 0 && sacrificeableAllies.length > 0) {
             // chúng ta sẽ tính toán xem nếu sacrifice thì sẽ có lợi hơn hay không
-            const sacrificeScore = this._calculateSacrificeScore(unit, sacrificeableAllies);
+            const sacrificeScore = this._calculateSacrificeScore(sacrificeableAllies);
             const attackScore = this._calculateAttackScore(unit, attackableTargets);
             return sacrificeScore > attackScore ? sacrificeScore : attackScore;
         }
@@ -56,7 +57,7 @@ export class TankerStrategy extends BaseStrategy {
 
         // TH 2: nếu có khả năng sacrifice
         if (sacrificeableAllies.length > 0) {
-            return this._calculateSacrificeScore(unit, sacrificeableAllies);
+            return this._calculateSacrificeScore(sacrificeableAllies);
         }
 
         // TH 4: nếu không có khả năng tấn công được quân thù và không có khả năng sacrifice
@@ -99,7 +100,47 @@ export class TankerStrategy extends BaseStrategy {
         return score;
     }
 
-    _calculateSacrificeScore(unit, sacrificeableAllies) {
+    chooseBestTarget(unit, row, col) {
+        // tìm các allies có thể sacrifice
+        const sacrificeableAllies = this._getSacrificeableAllies(unit, row, col);
+        let sacrificeScore = this._calculateSacrificeScore(sacrificeableAllies);
+
+        // tìm các quân thù có thể tấn công được
+        const attackableTargets = this._getAttackableTargets(unit, row, col);
+        let attackScore = this._calculateAttackScore(unit, attackableTargets);
+
+        if (sacrificeScore > attackScore) {
+            // tìm quân đội có score sacrifice cao nhất
+            let bestTarget = null;
+            let bestScore = 0;
+            for (const ally of sacrificeableAllies) {
+                let score = 0;
+                if (ally.type === 'Ranger' || ally.type === 'Ara' || ally.type === 'Wizzi' || ally.type === 'Trarex') {
+                    score += 40;
+                } else if (ally.type === 'Assassin' || ally.type === 'Taki' || ally.type === 'Nizza' || ally.type === 'Trezdin') {
+                    score += 25;
+                } else {
+                    score += 5;
+                }
+
+                // cộng thêm bonus dựa trên lượng máu còn lại, càng ít thì càng ưu tiên
+                const maxHp = UNIT_TYPES[ally.armyType].maxHp;
+                const hpRatio = ally.hp / maxHp;
+                score += (1 - hpRatio) * 10;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTarget = ally;
+                }
+            }
+
+            return bestTarget;
+        } else {
+            return super.chooseBestTarget(unit, row, col);
+        }
+    }
+
+    _calculateSacrificeScore(sacrificeableAllies) {
         let maxScore = 0;
         for (const ally of sacrificeableAllies) {
             if (ally.type === 'Ranger' || ally.type === 'Ara' || ally.type === 'Wizzi' || ally.type === 'Trarex') {

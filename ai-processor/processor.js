@@ -35,6 +35,11 @@ class Processor {
         return strategy ? strategy.evaluatePosition(unit, row, col) : -1;
     }
 
+    chooseBestTarget(unit, row, col) {
+        const strategy = this.strategies[unit.name];
+        return strategy ? strategy.chooseBestTarget(unit, row, col) : null;
+    }
+
     evaluatePositions(unit) {
         // Lấy tất cả các ô mà unit có thể di chuyển đến
         const reachableCells = this.gameLogic.getReachableCells(unit);

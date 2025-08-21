@@ -103,7 +103,7 @@ export class BaseStrategy {
         let bestTarget = null;  // target có score cao nhất
         let bestScore = 0;
         for (const target of attackableTargets) {
-            const score = this.attackBonusTable[target.armyType];
+            let score = this.attackBonusTable[target.armyType];
 
             // ưu tiên tấn công quân có hp = 1 để diệt bớt attack turn của địch
             if (target.hp === 1) {
