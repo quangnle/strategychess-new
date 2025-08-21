@@ -38,6 +38,8 @@ class P5BattleGraphics {
         
         // Initialize p5 sketch
         this.initP5Sketch();
+
+        this.recentActions = [];
     }
     
     loadImages() {
@@ -70,11 +72,25 @@ class P5BattleGraphics {
                 
                 // Setup click event
                 canvas.mousePressed(() => {
+                    // kiểm tra nếu game đã kết thúc
+                    const result = this.gameLogic.isGameEnd();
+                    if (result !== 0) {
+                        this.drawGameEndInfoBoard(result);
+                        return;
+                    }
+
                     this.handleCanvasClick(p.mouseX, p.mouseY);
                 });
                 
                 // Setup keyboard event
                 p.keyPressed = () => {
+                    // kiểm tra nếu game đã kết thúc
+                    const result = this.gameLogic.isGameEnd();
+                    if (result !== 0) {
+                        this.drawGameEndInfoBoard(result);
+                        return;
+                    }
+
                     this.handleKeyPress(p.key);
                 };
             };
@@ -88,11 +104,19 @@ class P5BattleGraphics {
     }
     
     draw() {
+        // kiểm tra nếu game đã kết thúc
+        const result = this.gameLogic.isGameEnd();
+        if (result !== 0) {
+            this.drawGameEndInfoBoard(result);
+            return;
+        }
+
         this.drawBoard();
         this.drawUnits();
         this.highlightReachableCells();
         this.drawTurnInfo();
         this.drawTurnSequence();
+        this.drawRecentActions();
     }
     
     drawBoard() {
@@ -217,6 +241,28 @@ class P5BattleGraphics {
             this.p.fill(255, 255, 255, 128); // 50% transparent white
             this.p.text('⛔', x + 8, y + this.cellSize - 8);
         }
+    }
+
+    drawArrowIndicator(fromCell, toCell, color) {
+        const x1 = this.offsetX + fromCell.col * this.cellSize + this.cellSize / 2;
+        const y1 = this.offsetY + fromCell.row * this.cellSize + this.cellSize / 2;
+        const x2 = this.offsetX + toCell.col * this.cellSize + this.cellSize / 2;
+        const y2 = this.offsetY + toCell.row * this.cellSize + this.cellSize / 2;
+
+        this.p.stroke(color);
+        this.p.strokeWeight(2);
+        this.p.line(x1, y1, x2, y2);
+
+        // Draw arrowhead
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const arrowSize = 10;
+        const x3 = x2 - arrowSize * Math.cos(angle - Math.PI / 6);
+        const y3 = y2 - arrowSize * Math.sin(angle - Math.PI / 6);
+        const x4 = x2 - arrowSize * Math.cos(angle + Math.PI / 6);
+        const y4 = y2 - arrowSize * Math.sin(angle + Math.PI / 6);
+        
+        this.p.fill(color);
+        this.p.triangle(x2, y2, x3, y3, x4, y4);
     }
     
     highlightReachableCells() {
@@ -432,6 +478,59 @@ class P5BattleGraphics {
         
         this.p.text(`🔮 ${effectTexts.join(', ')}`, x, y);
     }
+
+    drawRecentActions() {
+        this.recentActions.forEach(action => {
+            switch (action.type) {
+                case 'move':
+                    this.drawArrowIndicator(action.from, action.to, this.p.color(0, 255, 0, 128));
+                    break;
+                case 'attack':
+                    this.drawArrowIndicator(action.from, action.to, this.p.color(255, 0, 0, 128));
+                    break;
+                case 'heal':
+                    this.drawArrowIndicator(action.from, action.to, this.p.color(0, 0, 255, 128));
+                    break;
+                case 'sacrifice':
+                    this.drawArrowIndicator(action.from, action.to, this.p.color(255, 255, 0, 128));
+                    break;
+            }
+        });
+    }
+
+    drawGameEndInfoBoard(result) {
+        // Draw game end info board on the center of the canvas
+        const panelX = this.offsetX + this.boardWidth + 20;
+        const panelY = this.offsetY;
+        const panelWidth = 120;
+        const panelHeight = this.boardHeight;
+
+        // Panel background
+        this.p.fill(0, 0, 0, 204);
+        this.p.noStroke();
+        this.p.rect(panelX, panelY, panelWidth, panelHeight);
+
+        // Panel border
+        this.p.stroke(102);
+        this.p.strokeWeight(2);
+        this.p.noFill();
+        this.p.rect(panelX, panelY, panelWidth, panelHeight);
+
+        // Title
+        this.p.fill(255);
+        this.p.textSize(16);
+        this.p.textStyle(this.p.BOLD);
+        this.p.textAlign(this.p.CENTER, this.p.CENTER);
+        this.p.text('Game End', panelX + panelWidth / 2, panelY + 25);
+
+        // Draw game end info
+        const labelText = result === 1 ? 'Team 1 wins!' : result === 2 ? 'Team 2 wins!' : 'Draw!';
+        this.p.fill(255);
+        this.p.textSize(14);
+        this.p.textAlign(this.p.CENTER, this.p.CENTER);
+        this.p.text(labelText, panelX + panelWidth / 2, panelY + 40);
+
+    }
     
     handleCanvasClick(mouseX, mouseY) {
         // Check if click is within the board area
@@ -467,9 +566,18 @@ class P5BattleGraphics {
         
         if (isReachable) {
             // Try to make move
+
+            // lưu lại old position để vẽ arrow indicator
+            const oldCell = { row: currentUnit.row, col: currentUnit.col };
+
             const moveSuccess = this.gameLogic.makeMove(currentUnit, row, col);
             if (moveSuccess) {
                 console.log(`Unit moved to (${row}, ${col})`);
+
+                // xóa recent actions
+                this.recentActions = [];
+                // lưu lại action
+                this.recentActions.push({ type: 'move', from: oldCell, to: { row, col } });
 
                 const canAttack = this.gameLogic.getAttackableTargets(currentUnit).length > 0;
                 const canHeal = this.gameLogic.getHealableTargets(currentUnit).length > 0;
@@ -489,6 +597,14 @@ class P5BattleGraphics {
             const suicideSuccess = this.gameLogic.makeSuicide(currentUnit);
             if (suicideSuccess) {
                 console.log('Suicide executed');
+
+                // kiểm tra nếu game đã kết thúc
+                const result = this.gameLogic.isGameEnd();
+                if (result !== 0) {
+                    this.drawGameEndInfoBoard(result);
+                    return;
+                }
+
                 this.gameLogic.newTurn();
             }
             return;
@@ -501,6 +617,23 @@ class P5BattleGraphics {
             const attackSuccess = this.gameLogic.makeAttack(currentUnit, clickedUnit);
             if (attackSuccess) {
                 console.log(`Attacked unit at (${clickedUnit.row}, ${clickedUnit.col})`);
+
+                // xóa recent actions
+                this.recentActions = [];
+                // lưu lại action
+                this.recentActions.push({
+                    type: 'attack',
+                    from: { row: currentUnit.row, col: currentUnit.col },
+                    to: { row: clickedUnit.row, col: clickedUnit.col }
+                });
+
+                // kiểm tra nếu game đã kết thúc
+                const result = this.gameLogic.isGameEnd();
+                if (result !== 0) {
+                    this.drawGameEndInfoBoard(result);
+                    return;
+                }
+
                 this.gameLogic.newTurn();
             }
             return;
@@ -513,6 +646,16 @@ class P5BattleGraphics {
             const healSuccess = this.gameLogic.makeHeal(currentUnit, clickedUnit);
             if (healSuccess) {
                 console.log(`Healed unit at (${clickedUnit.row}, ${clickedUnit.col})`);
+
+                // xóa recent actions
+                this.recentActions = [];
+                // lưu lại action
+                this.recentActions.push({
+                    type: 'heal',
+                    from: { row: currentUnit.row, col: currentUnit.col },
+                    to: { row: clickedUnit.row, col: clickedUnit.col }
+                });
+
                 this.gameLogic.newTurn();
             }
             return;
@@ -525,6 +668,16 @@ class P5BattleGraphics {
             const sacrificeSuccess = this.gameLogic.makeSacrifice(currentUnit, clickedUnit);
             if (sacrificeSuccess) {
                 console.log(`Sacrificed for unit at (${clickedUnit.row}, ${clickedUnit.col})`);
+
+                // xóa recent actions
+                this.recentActions = [];
+                // lưu lại action
+                this.recentActions.push({
+                    type: 'sacrifice',
+                    from: { row: currentUnit.row, col: currentUnit.col },
+                    to: { row: clickedUnit.row, col: clickedUnit.col }
+                });
+
                 this.gameLogic.newTurn();
             }
             return;
@@ -545,28 +698,69 @@ class P5BattleGraphics {
                 const bestMove = results.reduce((best, current) => {
                     return current.score > best.score ? current : best;
                 }, results[0]);
-                console.log('Best Move:', bestMove);
+                console.log('Best Move:', bestMove);                
 
+                // xóa recent actions
+                this.recentActions = [];
+                // lưu lại action
+                this.recentActions.push({
+                    type: 'move',
+                    from: { row: currentUnit.row, col: currentUnit.col },
+                    to: { row: bestMove.row, col: bestMove.col }
+                });
+
+                // thực hiện move
                 this.gameLogic.makeMove(currentUnit, bestMove.row, bestMove.col);
-                
+
                 const bestTarget = this.processor.chooseBestTarget(currentUnit, currentUnit.row, currentUnit.col);
                 if (bestTarget) {
                     // kiểm tra nếu bestTarget là quân đội đồng minh
                     if (bestTarget.teamId === currentUnit.teamId) {
                         // kiểm tra nếu currentUnit có ability sacrifice
                         if (currentUnit.abilities.includes(SACRIFICE)) {
+                            // lưu lại action
+                            this.recentActions.push({
+                                type: 'sacrifice',
+                                from: { row: currentUnit.row, col: currentUnit.col },
+                                to: { row: bestTarget.row, col: bestTarget.col }
+                            });
+
+                            // thực hiện sacrifice
                             this.gameLogic.makeSacrifice(currentUnit, bestTarget);
                         }
 
                         // kiểm tra nếu currentUnit có ability heal
                         if (currentUnit.abilities.includes(HEAL)) {
+                            // lưu lại action
+                            this.recentActions.push({
+                                type: 'heal',
+                                from: { row: currentUnit.row, col: currentUnit.col },
+                                to: { row: bestTarget.row, col: bestTarget.col }
+                            });
+
+                            // thực hiện heal
                             this.gameLogic.makeHeal(currentUnit, bestTarget);
                         }
                     } else {
+                        // lưu lại action
+                        this.recentActions.push({
+                            type: 'attack',
+                            from: { row: currentUnit.row, col: currentUnit.col },
+                            to: { row: bestTarget.row, col: bestTarget.col }
+                        });
+
+                        // thực hiện attack
                         this.gameLogic.makeAttack(currentUnit, bestTarget);
                     }
                 }
-                
+
+                // kiểm tra nếu game đã kết thúc
+                const result = this.gameLogic.isGameEnd();
+                if (result !== 0) {
+                    this.drawGameEndInfoBoard(result);
+                    return;
+                }
+
                 // tự động chuyển sang turn của unit khác
                 this.gameLogic.newTurn();
             } else {

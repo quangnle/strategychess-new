@@ -79,7 +79,7 @@ class GameLogic {
     
     makeMove(unit, row, col) {
         // kiểm tra xem game có kết thúc không
-        if (this.isGameEnd()) {
+        if (this.isGameEnd() !== 0) {
             return false;
         }
 
@@ -137,7 +137,7 @@ class GameLogic {
 
     makeAttack(unit, target) {
         // kiểm tra xem game có kết thúc không
-        if (this.isGameEnd()) {
+        if (this.isGameEnd() !== 0) {
             return false;
         }
 
@@ -177,7 +177,7 @@ class GameLogic {
 
     makeHeal(unit, target) {
         // kiểm tra xem game có kết thúc không
-        if (this.isGameEnd()) {
+        if (this.isGameEnd() !== 0) {
             return false;
         }
 
@@ -214,7 +214,7 @@ class GameLogic {
 
     makeSacrifice(unit, target) {
         // kiểm tra xem game có kết thúc không
-        if (this.isGameEnd()) {
+        if (this.isGameEnd() !== 0) {
             return false;
         }
 
@@ -257,7 +257,7 @@ class GameLogic {
 
     makeSuicide(unit) {
         // kiểm tra xem game có kết thúc không
-        if (this.isGameEnd()) {
+        if (this.isGameEnd() !== 0) {
             return false;
         }
 
@@ -307,22 +307,30 @@ class GameLogic {
             throw new Error("isGameEnd: Base not found!");
         }
 
-        if (team1Base.hp <= 0 || team2Base.hp <= 0) {
-            return true;
+        if (team1Base.hp <= 0) {
+            return 2; // team 2 thắng
+        }
+
+        if (team2Base.hp <= 0) {
+            return 1; // team 1 thắng
         }
 
         // kiểm tra xem unit team nào đã hết unit còn sống
         const team1Units = this.matchInfo.team1.units.filter(u => u.hp > 0 && u.name !== "Base");
         const team2Units = this.matchInfo.team2.units.filter(u => u.hp > 0 && u.name !== "Base");
-        if (team1Units.length === 0 || team2Units.length === 0) {
-            return true;
+        if (team1Units.length === 0) {
+            return 2; // team 2 thắng
+        }
+
+        if (team2Units.length === 0) {
+            return 1;
         }
 
         if (this.roundNo >= 20) {
-            return true;
+            return 3; // hòa
         }
 
-        return false;
+        return 0;
     }
 
     getAttackableTargets(unit) {
