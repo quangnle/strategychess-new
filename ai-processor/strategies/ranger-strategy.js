@@ -37,7 +37,33 @@ export class RangerStrategy extends BaseStrategy {
         // Bước 2: tính threat count là số lượng quân thù có thể đánh được ô (row, col)
         const attackableThreatCount = this._countThreats(unit, row, col);
         // Bước 3: ưu tiên đi gần với đồng đội, nhất là tanker
-        const allies = this._getAllies(unit);            
+        const allyDistanceBonus = this._getAllyDistanceBonus(unit, row, col);
+        // Bước 4: ưu tiên tiến gần đến quân thù
+        const enemyDistanceBonus = this._getEnemyDistanceBonus(unit, row, col);
+
+        score = score - adjacentThreatCount * 60 - attackableThreatCount * 40 + allyDistanceBonus + enemyDistanceBonus;
+        
+        return score;
+    }
+
+    _getEnemyDistanceBonus(unit, row, col) {
+        const enemies = this._getEnemies(unit);
+        let enemyDistanceBonus = 0;
+        for (const enemy of enemies) {
+            const distance = this.gameLogic._getManhattanDistance({ row, col }, enemy);
+            if (enemy.armyType === 'Ranger' || enemy.armyType === 'Trarex' || enemy.armyType === 'Ara') {
+                enemyDistanceBonus += 10 / distance;
+            } else if (enemy.armyType ==='Assassin' || enemy.armyType === 'Nizza' || enemy.armyType === 'Wizzi') {
+                enemyDistanceBonus += 7 / distance;
+            } else {
+                enemyDistanceBonus += 4 / distance;
+            }                
+        }
+        return enemyDistanceBonus;
+    }
+
+    _getAllyDistanceBonus(unit, row, col) {
+        const allies = this._getAllies(unit);
         let allyDistanceBonus = 0;
         for (const ally of allies) {
             const distance = this.gameLogic._getManhattanDistance({ row, col }, ally);
@@ -49,9 +75,7 @@ export class RangerStrategy extends BaseStrategy {
                 allyDistanceBonus += 4 / distance;
             }                
         }
-        score = score - adjacentThreatCount * 60 - attackableThreatCount * 40 + allyDistanceBonus;
-        
-        return score;
+        return allyDistanceBonus;
     }
 
     _getAdjacentThreats(unit, row, col) {

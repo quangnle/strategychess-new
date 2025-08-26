@@ -74,12 +74,17 @@ export class TankerStrategy extends BaseStrategy {
 
             const maxHp = UNIT_TYPES[ally.armyType].hp;
             
-            // ưu tiên những quân có máu ít hơn
-            let multiply = 10 * maxHp / ally.hp;
+            // chỉ quan tâm đến quân đội bị mất máu
+            let multiply = 0;
+            if (ally.hp < maxHp) {
+                multiply = 10 * maxHp / ally.hp;
+            }
+            // let multiply = 10 * maxHp / ally.hp;
             // ưu tiên những quân có range xa
             if (ally.range > 1) {
                 multiply *= 2;
             }
+
             const d = this.gameLogic._getManhattanDistance({ row, col }, ally);
             score += 1 / d * multiply;
         }
@@ -87,7 +92,7 @@ export class TankerStrategy extends BaseStrategy {
         // tính bonus dựa trên khoảng cách đến quân thù
         // tổng khoảng cách đến quân thù càng nhỏ thì bonus càng lớn
         let distanceBonus = 0;
-        const enemies = this._getEnemies(unit);
+        const enemies = this._getEnemies(unit).filter(enemy => enemy.hp > 0 && enemy.armyType !== 'Base');
         for (const enemy of enemies) {
             const d = this.gameLogic._getManhattanDistance({ row, col }, enemy);
             distanceBonus  += 1 / d * this.alphaTable[enemy.armyType];
