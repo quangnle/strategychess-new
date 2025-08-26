@@ -44,7 +44,7 @@ export class AssassinStrategy extends BaseStrategy {
 
         // kiểm tra ô hiện tại có thể bị tấn công từ bao nhiêu enemy
         const threatCount = this._countThreats(unit, row, col);
-        score -= threatCount * 30;
+        score -= threatCount * 20;
 
         // tính bonus dựa trên khoảng cách đến quân thù
         // tổng khoảng cách đến quân thù càng nhỏ thì bonus càng lớn

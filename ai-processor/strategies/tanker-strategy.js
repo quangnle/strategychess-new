@@ -4,15 +4,15 @@ import { BaseStrategy } from "./base-strategy.js";
 export class TankerStrategy extends BaseStrategy {
     alphaTable = {
         'Tanker': 16,
-        'Assassin': 30,
-        'Ranger': 40,
-        'Base': 10,
+        'Assassin': 40,
+        'Ranger': 50,
+        'Base': 15,
         'Trezdin': 20,
         'Taki': 15,
-        'Trarex': 50,
-        'Ara': 50,
-        'Nizza': 40,
-        'Wizzi': 40
+        'Trarex': 60,
+        'Ara': 60,
+        'Nizza': 50,
+        'Wizzi': 60
     };
 
     // Common static tables that can be overridden by subclasses
@@ -47,17 +47,17 @@ export class TankerStrategy extends BaseStrategy {
             // chúng ta sẽ tính toán xem nếu sacrifice thì sẽ có lợi hơn hay không
             const sacrificeScore = this._calculateSacrificeScore(sacrificeableAllies);
             const attackScore = this._calculateAttackScore(unit, attackableTargets);
-            return sacrificeScore > attackScore ? sacrificeScore : attackScore;
+            score = sacrificeScore > attackScore ? sacrificeScore : attackScore;
         }
 
         // TH 1: nếu có khả năng tấn công được quân thù
         if (attackableTargets.length > 0) {
-            return this._calculateAttackScore(unit, attackableTargets);
+            score = this._calculateAttackScore(unit, attackableTargets);
         }
 
         // TH 2: nếu có khả năng sacrifice
         if (sacrificeableAllies.length > 0) {
-            return this._calculateSacrificeScore(sacrificeableAllies);
+            score = this._calculateSacrificeScore(sacrificeableAllies);
         }
 
         // TH 4: nếu không có khả năng tấn công được quân thù và không có khả năng sacrifice
@@ -66,27 +66,34 @@ export class TankerStrategy extends BaseStrategy {
         // + gần với quân thù
 
         // tìm tất cả quân đội đồng minh đang mất máu
-        const allies = this._getAllies(unit);
-        // chỉ cần tìm những quân đội nào trong tầm 1 bước đi kế tiếp có thể đến được và nó đang mất máu và nó không phải là tanker
-        const alliesInRange = allies.filter(ally => this.gameLogic._getManhattanDistance({ row, col }, ally) <= unit.speed && ally.hp < ally.maxHp && ally.type !== 'Tanker');
+        const allies = this._getAllies(unit).filter(ally => ally.id !== unit.id) ;
         // tính bonus 
-        for (const ally of alliesInRange) {
-            const d = this.gameLogic._getManhattanDistance({ row, col }, ally);
+        for (const ally of allies) {
+            // không ưu tiên tanker
+            if (ally.armyType === 'Tanker') continue;
+
+            const maxHp = UNIT_TYPES[ally.armyType].hp;
+            
+            // ưu tiên những quân có máu ít hơn
+            let multiply = 10 * maxHp / ally.hp;
             // ưu tiên những quân có range xa
-            let multiply = 10;
             if (ally.range > 1) {
-                multiply = 20;
+                multiply *= 2;
             }
+            const d = this.gameLogic._getManhattanDistance({ row, col }, ally);
             score += 1 / d * multiply;
         }
 
         // tính bonus dựa trên khoảng cách đến quân thù
         // tổng khoảng cách đến quân thù càng nhỏ thì bonus càng lớn
+        let distanceBonus = 0;
         const enemies = this._getEnemies(unit);
         for (const enemy of enemies) {
             const d = this.gameLogic._getManhattanDistance({ row, col }, enemy);
-            score += 1 / d * this.alphaTable[enemy.armyType];
+            distanceBonus  += 1 / d * this.alphaTable[enemy.armyType];
         }
+        console.log(`distanceBonus: ${distanceBonus} of (${row}, ${col})`);
+        score += distanceBonus;
 
         // tính bonus dựa trên số lượng quân thù có Adjacent Penalty
         const adjacentCount = this._countAdjacents(unit, row, col);
@@ -115,16 +122,16 @@ export class TankerStrategy extends BaseStrategy {
             let bestScore = 0;
             for (const ally of sacrificeableAllies) {
                 let score = 0;
-                if (ally.type === 'Ranger' || ally.type === 'Ara' || ally.type === 'Wizzi' || ally.type === 'Trarex') {
+                if (ally.armyType === 'Ranger' || ally.armyType === 'Ara' || ally.armyType === 'Wizzi' || ally.armyType === 'Trarex') {
                     score += 40;
-                } else if (ally.type === 'Assassin' || ally.type === 'Taki' || ally.type === 'Nizza' || ally.type === 'Trezdin') {
+                } else if (ally.armyType === 'Assassin' || ally.armyType === 'Taki' || ally.armyType === 'Nizza' || ally.armyType === 'Trezdin') {
                     score += 25;
                 } else {
                     score += 5;
                 }
 
                 // cộng thêm bonus dựa trên lượng máu còn lại, càng ít thì càng ưu tiên
-                const maxHp = UNIT_TYPES[ally.armyType].maxHp;
+                const maxHp = UNIT_TYPES[ally.armyType].hp;
                 const hpRatio = ally.hp / maxHp;
                 score += (1 - hpRatio) * 10;
 
@@ -143,12 +150,12 @@ export class TankerStrategy extends BaseStrategy {
     _calculateSacrificeScore(sacrificeableAllies) {
         let maxScore = 0;
         for (const ally of sacrificeableAllies) {
-            if (ally.type === 'Ranger' || ally.type === 'Ara' || ally.type === 'Wizzi' || ally.type === 'Trarex') {
+            if (ally.armyType === 'Ranger' || ally.armyType === 'Ara' || ally.armyType === 'Wizzi' || ally.armyType === 'Trarex') {
+                maxScore = Math.max(maxScore, 65);
+            } else if (ally.armyType === 'Assassin' || ally.armyType === 'Taki' || ally.armyType === 'Nizza' || ally.armyType === 'Trezdin') {
                 maxScore = Math.max(maxScore, 40);
-            } else if (ally.type === 'Assassin' || ally.type === 'Taki' || ally.type === 'Nizza' || ally.type === 'Trezdin') {
-                maxScore = Math.max(maxScore, 25);
             } else {
-                maxScore = Math.max(maxScore, 5);
+                maxScore = Math.max(maxScore, 15);
             }
         }
 
@@ -156,13 +163,18 @@ export class TankerStrategy extends BaseStrategy {
     }
 
     _getSacrificeableAllies(unit, row, col) {
+        const result = [];
         const allies = this._getAllies(unit);
         // tìm tất cả đồng đội mà có khoảng cách Manhattan đến ô (row, col) nhỏ hơn hoặc bằng range của unit
-        let sacrificeableAllies = allies.filter(ally => this.gameLogic._getManhattanDistance({ row, col }, ally) === 1);
         // chỉ xét đồng đội không phải là tanker, vì sacrifice cho tanker khác không có lợi
-        sacrificeableAllies = sacrificeableAllies.filter(ally => ally.type !== 'Tanker');
-        // chỉ xét đồng đội có hp < maxHp
-        sacrificeableAllies = sacrificeableAllies.filter(ally => ally.hp < ally.maxHp);
-        return sacrificeableAllies;
+        const sacrificeableAllies = allies.filter(ally => this.gameLogic._getManhattanDistance({ row, col }, ally) === 1 && ally.armyType !== 'Tanker');
+        // chỉ xét đồng đội có hp < maxHp        
+        for (const ally of sacrificeableAllies) {
+            let maxHp = UNIT_TYPES[ally.armyType].hp;
+            if (ally.hp < maxHp) {
+                result.push(ally);
+            }
+        }
+        return result;
     }
 } 

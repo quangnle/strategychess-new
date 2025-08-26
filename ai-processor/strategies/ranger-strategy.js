@@ -22,7 +22,7 @@ export class RangerStrategy extends BaseStrategy {
         
         let isAdjacentPenalty = false;
         // kiểm tra xem có đang bị effect của ADJACENT_PENALTY không
-        if (unit.abilities.includes(ADJACENT_PENALTY)) {
+        if (unit.effects.includes(ADJACENT_PENALTY)) {
             isAdjacentPenalty = true;
         }
 
@@ -41,9 +41,9 @@ export class RangerStrategy extends BaseStrategy {
         let allyDistanceBonus = 0;
         for (const ally of allies) {
             const distance = this.gameLogic._getManhattanDistance({ row, col }, ally);
-            if (ally.type === 'Tanker' || ally.type === 'Taki' || ally.type === 'Trezdin') {
+            if (ally.armyType === 'Tanker' || ally.armyType === 'Taki' || ally.armyType === 'Trezdin') {
                 allyDistanceBonus += 10 / distance;
-            } else if (ally.type ==='Assassin' || ally.type === 'Trarex' || ally.type === 'Nizza' || ally.type === 'Wizzi') {
+            } else if (ally.armyType ==='Assassin' || ally.armyType === 'Trarex' || ally.armyType === 'Nizza' || ally.armyType === 'Wizzi') {
                 allyDistanceBonus += 7 / distance;
             } else {
                 allyDistanceBonus += 4 / distance;
@@ -58,7 +58,7 @@ export class RangerStrategy extends BaseStrategy {
         const enemies = this._getEnemies(unit);
         let adjacentThreats = [];
         for (const enemy of enemies) {
-            const gameLogicCopy = this._simulateMoveState(enemy, row, col);
+            const gameLogicCopy = this._simulateMoveState(enemy, row, col, this.gameLogic);
             const enemyReachableCells = gameLogicCopy.getReachableCells(enemy);
             // nếu enemyReachableCells tồn tại 1 ô có khoảng cách Manhattan đến ô (row, col) nhỏ hơn hoặc bằng 1
             // thì thêm enemy vào adjacentThreats

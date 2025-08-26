@@ -37,7 +37,11 @@ export class BaseStrategy {
 
     _countThreats(unit, row, col) {        
         const enemies = this._getEnemies(unit);
+        const allies = this._getAllies(unit).filter(ally => ally.hp > 0 && ally.id !== unit.id);
         let threatCount = 0;
+
+        // giả lập unit đi đến vị trí row, col
+        const gameLogicCopy = this._simulateMoveState(unit, row, col, this.gameLogic);
         for (const enemy of enemies) {
             // chỉ kiểm tra những enemy đang không bị effect của ADJACENT_PENALTY
             if (enemy.effects.includes(ADJACENT_PENALTY)) {
@@ -49,16 +53,36 @@ export class BaseStrategy {
                 if (this.gameLogic._getManhattanDistance({ row, col }, enemy) === 1) {
                     continue; 
                 }
-            }
+            }            
             
-            const gameLogicCopy = this._simulateMoveState(unit, row, col);
             const enemyReachableCells = gameLogicCopy.getReachableCells(enemy);
+            let threatScore = 0;
             for (const cell of enemyReachableCells) {
+                // nếu enemy có thể đánh tới vị trí row, col
                 if (gameLogicCopy._getManhattanDistance({ row, col }, cell) <= enemy.range) {
-                    threatCount++;
+                    // giả lập enemy đi đến cell này
+                    const gameLogicCopy2 = this._simulateMoveState(enemy, cell.row, cell.col, gameLogicCopy);
+                    // kiếm tra xem có ally nào có thể đánh tới cell này không
+                    let allyCanAttack = false;
+                    for (const ally of allies) {
+                        const allyReachableCells = gameLogicCopy2.getReachableCells(ally);
+                        for (const allyCell of allyReachableCells) {
+                            if (gameLogicCopy2._getManhattanDistance({ row: cell.row, col: cell.col }, allyCell) <= ally.range) {
+                                allyCanAttack = true;
+                                break;
+                            }
+                        }
+                        if (allyCanAttack) break;
+                    }
+                    if (allyCanAttack) {
+                        threatScore = 0.3;
+                    } else {
+                        threatScore = 1;
+                    }
                     break;
                 }
-            }
+            } 
+            threatCount += threatScore;
         }
         return threatCount;
     }
@@ -125,12 +149,12 @@ export class BaseStrategy {
         return bestTarget;
     }
 
-    _simulateMoveState(unit, row, col) {
+    _simulateMoveState(unit, row, col, gameLogic) {
         // tạo ra một bản sao của trạng thái bàn cờ hiện tại của game 
         // bằng cách tạo ra một bản sao của gameLogic
         // và sửa đổi vị trí của unit hiện tại thành row, col
         // sau đó trả về trạng thái bàn cờ mới
-        const matchInfoCopy = this.gameLogic.matchInfo.clone();
+        const matchInfoCopy = gameLogic.matchInfo.clone();
         const gameLogicCopy = new GameLogic(matchInfoCopy);
         const unitCopy = gameLogicCopy._getAllUnits().filter(u => u.id === unit.id)[0];
         unitCopy.row = row;
