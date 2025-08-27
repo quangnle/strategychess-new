@@ -26,6 +26,9 @@ export class RangerStrategy extends BaseStrategy {
             isAdjacentPenalty = true;
         }
 
+        // kiểm tra nếu ô (row, col) có quân thù đứng cạnh 
+        isAdjacentPenalty = this._isAdjacentToAnEnemy(unit, row, col);
+
         // nếu ô (row, col) có target
         const targets = this._getAttackableTargets(unit, row, col);
         if (targets.length > 0 && !isAdjacentPenalty) {            
@@ -107,5 +110,15 @@ export class RangerStrategy extends BaseStrategy {
         }
 
         return adjacentThreats;
+    }
+
+    _isAdjacentToAnEnemy(unit, row, col) {
+        const enemies = this._getEnemies(unit);
+        for (const enemy of enemies) {
+            if (this.gameLogic._getManhattanDistance({ row, col }, enemy) <= 1) {
+                return true;
+            }
+        }
+        return false;
     }
 } 
