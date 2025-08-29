@@ -11,28 +11,43 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeActionButtons();
 });
 
-// Action buttons functionality
-function initializeActionButtons() {
-    const challengeFriendsBtn = document.getElementById('challenge-friends-btn');
-    const playAiBtn = document.getElementById('play-ai-btn');
-    
-    if (challengeFriendsBtn) {
-        challengeFriendsBtn.addEventListener('click', () => {
-            console.log('Challenge with friends clicked');
-            // Redirect to team selection page
-            window.location.href = 'index2.html';
-        });
-    }
-    
-    if (playAiBtn) {
+ // Action buttons functionality
+ function initializeActionButtons() {
+     const createMatchBtn = document.getElementById('create-match-btn');
+     const matchNameInput = document.getElementById('match-name');
+     const playAiBtn = document.getElementById('play-ai-btn');
+     
+     if (createMatchBtn && matchNameInput) {
+         createMatchBtn.addEventListener('click', () => {
+             const matchName = matchNameInput.value.trim();
+             if (!matchName) {
+                 alert('Please enter a match name');
+                 return;
+             }
+             
+             console.log('Creating match:', matchName);
+             // TODO: Implement match creation logic
+             // For now, redirect to team selection page
+             window.location.href = 'play-with-ai.html';
+         });
+         
+         // Allow Enter key to create match
+         matchNameInput.addEventListener('keypress', (e) => {
+             if (e.key === 'Enter') {
+                 createMatchBtn.click();
+             }
+         });
+     }
+     
+         if (playAiBtn) {
         playAiBtn.addEventListener('click', () => {
             console.log('Play with AI clicked');
             // For now, also redirect to team selection page
             // In the future, this could start an AI game directly
-            window.location.href = 'index2.html';
+            window.location.href = 'play-with-ai.html';
         });
     }
-}
+ }
 
 // Chat functionality
 function initializeChat() {

@@ -57,18 +57,28 @@
          <!-- Main Content Area -->
      <main class="flex-1 container mx-auto px-4 py-8">
          <div class="flex flex-col space-y-8">
-             <!-- Action Buttons Section -->
-             <div class="flex flex-col items-center space-y-6">
-                 <button id="challenge-friends-btn" 
-                         class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-6 px-8 rounded-lg text-xl transition-colors shadow-lg">
-                     CHALLENGE WITH FRIENDS
-                 </button>
-                 
-                 <button id="play-ai-btn" 
-                         class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-8 rounded-lg text-xl transition-colors shadow-lg">
-                     PLAY WITH AI
-                 </button>
-             </div>
+                           <!-- Action Buttons Section -->
+              <div class="flex flex-col items-center space-y-6">
+                                     <!-- Challenge With Friends Panel -->
+                   <div class="bg-gray-800 rounded-lg p-6 border border-gray-600 shadow-lg">
+                       <h3 class="text-xl font-bold text-yellow-400 text-center mb-6">Challenge With Friends</h3>
+                       <div class="flex items-center space-x-4">
+                           <label for="match-name" class="text-gray-300 font-medium">Match Name:</label>
+                           <input type="text" id="match-name" 
+                                  placeholder="Enter match name..." 
+                                  class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
+                           <button id="create-match-btn" 
+                                   class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded transition-colors">
+                               Create
+                           </button>
+                       </div>
+                   </div>
+                  
+                  <button id="play-ai-btn" 
+                          class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-8 rounded-lg text-xl transition-colors shadow-lg">
+                      PLAY WITH AI
+                  </button>
+              </div>
  
              <!-- Chat Panel Section -->
              <div class="bg-gray-800 rounded-lg p-6">

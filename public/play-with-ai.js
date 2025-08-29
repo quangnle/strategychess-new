@@ -9,7 +9,8 @@ let currentUser = null;
 // Load definitions and graphics
 async function loadDefinitions() {
     try {
-        const module = await import('../core-logic/definitions.js');
+        // Since we're in the public directory, we need to use absolute paths
+        const module = await import('/core-logic/definitions.js');
         UNIT_TYPES = module.UNIT_TYPES;
         console.log('Definitions loaded successfully:', Object.keys(UNIT_TYPES));
         

@@ -34,6 +34,28 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
 }));
 
+// Serve core-logic directory
+app.use('/core-logic', express.static(path.join(__dirname, 'core-logic'), {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res, path) => {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+}));
+
+// Serve ai-processor directory
+app.use('/ai-processor', express.static(path.join(__dirname, 'ai-processor'), {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res, path) => {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+}));
+
 // Debug middleware with enhanced logging
 app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
