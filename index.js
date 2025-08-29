@@ -2,6 +2,10 @@
 let UNIT_TYPES = null;
 let P5BattleGraphics = null;
 
+// Chat functionality
+let chatSocket = null;
+let currentUser = null;
+
 // Load definitions and graphics
 async function loadDefinitions() {
     try {
@@ -316,6 +320,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Then initialize team managers
     initializeTeamManagers();
     
+    // Initialize chat functionality
+    initializeChat();
+    
     // Global start button handler
     document.getElementById('global-start-btn').addEventListener('click', () => {
         if (teamManagers && teamManagers.blue.isReady() && teamManagers.red.isReady()) {
@@ -430,4 +437,156 @@ function addGameControls() {
             alert(`Current Turn: ${turnInfo.inTurnUnit.name} (${turnInfo.inTurnUnit.teamId})\nCan Move: ${turnInfo.canMove}\nCan Attack: ${turnInfo.canAttack}\nCan Heal: ${turnInfo.canHeal}`);
         }
     });
+}
+
+// Chat functionality
+function initializeChat() {
+    console.log('Initializing chat functionality...');
+    
+    // Connect to chat namespace
+    chatSocket = io('/chat');
+    
+    // Chat UI elements
+    const chatContainer = document.getElementById('chat-container');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const sendButton = document.getElementById('send-message');
+    const toggleButton = document.getElementById('toggle-chat');
+    const usernameInput = document.getElementById('username-input');
+    const changeUsernameButton = document.getElementById('change-username');
+    const onlineCount = document.getElementById('online-count');
+    
+    // Toggle chat visibility
+    toggleButton.addEventListener('click', () => {
+        chatContainer.classList.toggle('hidden');
+        if (!chatContainer.classList.contains('hidden')) {
+            chatInput.focus();
+        }
+    });
+    
+    // Send message
+    function sendMessage() {
+        const message = chatInput.value.trim();
+        if (message && chatSocket) {
+            chatSocket.emit('chat:message', { message });
+            chatInput.value = '';
+        }
+    }
+    
+    sendButton.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+    
+    // Change username
+    changeUsernameButton.addEventListener('click', () => {
+        const newUsername = usernameInput.value.trim();
+        if (newUsername && chatSocket) {
+            chatSocket.emit('user:change_username', { username: newUsername });
+            usernameInput.value = '';
+        }
+    });
+    
+    // Socket event handlers
+    chatSocket.on('connect', () => {
+        console.log('Connected to chat server');
+        chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Connected to chat server</div>';
+    });
+    
+    chatSocket.on('user:connected', (data) => {
+        currentUser = data;
+        console.log('User connected:', data);
+        chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Welcome to the chat!</div>';
+        updateOnlineCount(data.onlineUsers.length);
+    });
+    
+    chatSocket.on('chat:messages', (messages) => {
+        displayMessages(messages);
+    });
+    
+    chatSocket.on('chat:message', (message) => {
+        addMessage(message);
+    });
+    
+    chatSocket.on('user:joined', (data) => {
+        addSystemMessage(`${data.username} joined the chat`);
+        updateOnlineCount(data.onlineUsers.length);
+    });
+    
+    chatSocket.on('user:left', (data) => {
+        addSystemMessage(`${data.username} left the chat`);
+        updateOnlineCount(data.onlineUsers.length);
+    });
+    
+    chatSocket.on('user:username_changed', (data) => {
+        if (data.userId === currentUser?.userId) {
+            currentUser.username = data.newUsername;
+        }
+        addSystemMessage(`${data.oldUsername} changed name to ${data.newUsername}`);
+    });
+    
+    chatSocket.on('chat:typing', (data) => {
+        // Handle typing indicator
+        console.log(`${data.username} is typing...`);
+    });
+    
+    chatSocket.on('error', (data) => {
+        addSystemMessage(`Error: ${data.message}`, 'error');
+    });
+    
+    chatSocket.on('disconnect', () => {
+        addSystemMessage('Disconnected from chat server', 'error');
+    });
+    
+    // Helper functions
+    function displayMessages(messages) {
+        chatMessages.innerHTML = '';
+        messages.forEach(message => addMessage(message));
+    }
+    
+    function addMessage(message) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'mb-2';
+        
+        const time = new Date(message.timestamp).toLocaleTimeString();
+        const isOwnMessage = message.userId === currentUser?.userId;
+        
+        messageDiv.innerHTML = `
+            <div class="flex ${isOwnMessage ? 'justify-end' : 'justify-start'}">
+                <div class="max-w-xs ${isOwnMessage ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'} rounded-lg px-3 py-2">
+                    <div class="text-xs text-gray-300 mb-1">${message.username} • ${time}</div>
+                    <div class="text-sm">${escapeHtml(message.message)}</div>
+                </div>
+            </div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function addSystemMessage(message, type = 'info') {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'mb-2 text-center';
+        
+        const colorClass = type === 'error' ? 'text-red-400' : 'text-gray-400';
+        
+        messageDiv.innerHTML = `
+            <div class="text-xs ${colorClass} italic">${escapeHtml(message)}</div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function updateOnlineCount(count) {
+        onlineCount.textContent = `Online: ${count}`;
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 }

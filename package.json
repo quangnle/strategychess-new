@@ -12,14 +12,20 @@
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "p5": "^1.9.0"
+    "express": "^4.18.2",
+    "p5": "^1.9.0",
+    "socket.io": "^4.7.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["game", "chess", "strategy", "offline"],
+  "keywords": [
+    "game",
+    "chess",
+    "strategy",
+    "offline"
+  ],
   "author": "Strategy Chess Team",
   "license": "MIT"
-} 
+}

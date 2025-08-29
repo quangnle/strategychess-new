@@ -6,6 +6,7 @@
     <title>Strategy Chess - Team Selection</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -107,6 +108,49 @@
                     class="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-lg text-xl transition-colors">
                 Start Battle
             </button>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="mt-8 bg-gray-800 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold text-yellow-400">Live Chat</h3>
+                <div class="flex items-center space-x-4">
+                    <span id="online-count" class="text-sm text-gray-300">Online: 0</span>
+                    <button id="toggle-chat" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                        Toggle Chat
+                    </button>
+                </div>
+            </div>
+            
+            <div id="chat-container" class="hidden">
+                <!-- Chat Messages -->
+                <div id="chat-messages" class="bg-gray-900 rounded p-4 h-64 overflow-y-auto mb-4 border border-gray-600">
+                    <div class="text-center text-gray-500 text-sm">Loading messages...</div>
+                </div>
+                
+                <!-- Chat Input -->
+                <div class="flex space-x-2">
+                    <input type="text" id="chat-input" 
+                           placeholder="Type your message..." 
+                           class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
+                    <button id="send-message" 
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                        Send
+                    </button>
+                </div>
+                
+                <!-- Username Change -->
+                <div class="mt-4 flex items-center space-x-2">
+                    <span class="text-sm text-gray-300">Username:</span>
+                    <input type="text" id="username-input" 
+                           placeholder="Your username" 
+                           class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm">
+                    <button id="change-username" 
+                            class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                        Change
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 

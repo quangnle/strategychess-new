@@ -1,0 +1,28 @@
+const { registerChatNS } = require('./namespaces/chat');
+
+function initSocket(io) {
+    console.log('Initializing Socket.IO...');
+    
+    // Register chat namespace
+    const chatNamespace = io.of('/chat');
+    registerChatNS(chatNamespace);
+    
+    // Register default namespace for general events
+    io.on('connection', (socket) => {
+        console.log(`User connected to default namespace: ${socket.id}`);
+        
+        // Handle general connection events
+        socket.on('disconnect', () => {
+            console.log(`User disconnected from default namespace: ${socket.id}`);
+        });
+        
+        // Handle ping/pong for connection health
+        socket.on('ping', () => {
+            socket.emit('pong');
+        });
+    });
+    
+    console.log('Socket.IO initialized successfully');
+}
+
+module.exports = initSocket;

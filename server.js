@@ -1,9 +1,19 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const server = createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+const PORT = process.env.PORT || 3000;
 const isDebug = process.argv.includes('--inspect') || process.argv.includes('--inspect-brk');
 
 // Enhanced CORS configuration
@@ -107,8 +117,12 @@ app.use((req, res) => {
     });
 });
 
+// Initialize Socket.IO
+const initSocket = require('./realtime/index.js');
+initSocket(io);
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log('='.repeat(50));
     console.log('🚀 Strategy Chess Debug Server');
     console.log('='.repeat(50));
