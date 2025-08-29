@@ -9,7 +9,7 @@ let currentUser = null;
 // Load definitions and graphics
 async function loadDefinitions() {
     try {
-        const module = await import('./core-logic/definitions.js');
+        const module = await import('../core-logic/definitions.js');
         UNIT_TYPES = module.UNIT_TYPES;
         console.log('Definitions loaded successfully:', Object.keys(UNIT_TYPES));
         
@@ -256,11 +256,15 @@ class TeamManager {
     updateUI() {
         // Update unit counter
         const counter = document.getElementById(`${this.teamColor}-unit-counter`);
-        counter.textContent = `(${this.selectedUnits.length}/${this.maxUnits})`;
+        if (counter) {
+            counter.textContent = `(${this.selectedUnits.length}/${this.maxUnits})`;
+        }
         
         // Update team name
         const nameInput = document.getElementById(`${this.teamColor}-team-name`);
-        this.teamName = nameInput.value;
+        if (nameInput) {
+            this.teamName = nameInput.value;
+        }
         
         // Update global start button state
         this.updateGlobalStartButton();
@@ -268,6 +272,8 @@ class TeamManager {
     
     updateGlobalStartButton() {
         const globalBtn = document.getElementById('global-start-btn');
+        if (!globalBtn) return;
+        
         // Check if teamManagers exists before accessing it
         if (window.teamManagers && window.teamManagers.blue && window.teamManagers.red) {
             const bothTeamsReady = window.teamManagers.blue.isReady() && window.teamManagers.red.isReady();
@@ -291,7 +297,9 @@ class TeamManager {
     
     bindEvents() {
         const nameInput = document.getElementById(`${this.teamColor}-team-name`);
-        nameInput.addEventListener('input', () => this.updateUI());
+        if (nameInput) {
+            nameInput.addEventListener('input', () => this.updateUI());
+        }
     }
 }
 
@@ -324,16 +332,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeChat();
     
     // Global start button handler
-    document.getElementById('global-start-btn').addEventListener('click', () => {
-        if (teamManagers && teamManagers.blue.isReady() && teamManagers.red.isReady()) {
-            startBattle();
-        }
-    });
+    const globalStartBtn = document.getElementById('global-start-btn');
+    if (globalStartBtn) {
+        globalStartBtn.addEventListener('click', () => {
+            if (teamManagers && teamManagers.blue.isReady() && teamManagers.red.isReady()) {
+                startBattle();
+            }
+        });
+    }
     
     // Back to selection button handler
-    document.getElementById('back-to-selection').addEventListener('click', () => {
-        showSelectionScreen();
-    });
+    const backToSelectionBtn = document.getElementById('back-to-selection');
+    if (backToSelectionBtn) {
+        backToSelectionBtn.addEventListener('click', () => {
+            showSelectionScreen();
+        });
+    }
 });
 
 // Battle functions
@@ -378,13 +392,19 @@ function createMatchInfo(blueTeam, redTeam) {
 }
 
 function showBattleScreen() {
-    document.getElementById('selection-screen').classList.add('hidden');
-    document.getElementById('battle-screen').classList.remove('hidden');
+    const selectionScreen = document.getElementById('selection-screen');
+    const battleScreen = document.getElementById('battle-screen');
+    
+    if (selectionScreen) selectionScreen.classList.add('hidden');
+    if (battleScreen) battleScreen.classList.remove('hidden');
 }
 
 function showSelectionScreen() {
-    document.getElementById('battle-screen').classList.add('hidden');
-    document.getElementById('selection-screen').classList.remove('hidden');
+    const battleScreen = document.getElementById('battle-screen');
+    const selectionScreen = document.getElementById('selection-screen');
+    
+    if (battleScreen) battleScreen.classList.add('hidden');
+    if (selectionScreen) selectionScreen.classList.remove('hidden');
 }
 
 let battleGraphics = null;
@@ -419,24 +439,33 @@ function addGameControls() {
         </button>
     `;
     
-    document.querySelector('#battle-screen .container').appendChild(controlsContainer);
+    const battleScreenContainer = document.querySelector('#battle-screen .container');
+    if (battleScreenContainer) {
+        battleScreenContainer.appendChild(controlsContainer);
+    }
     
     // Add event listeners
-    document.getElementById('next-turn-btn').addEventListener('click', () => {
-        if (battleGraphics) {
-            battleGraphics.nextTurn();
-        }
-    });
+    const nextTurnBtn = document.getElementById('next-turn-btn');
+    if (nextTurnBtn) {
+        nextTurnBtn.addEventListener('click', () => {
+            if (battleGraphics) {
+                battleGraphics.nextTurn();
+            }
+        });
+    }
     
-    document.getElementById('show-turn-info-btn').addEventListener('click', () => {
-        if (battleGraphics) {
-            const turnInfo = battleGraphics.getCurrentTurnInfo();
-            const turnSequence = battleGraphics.getTurnSequence();
-            console.log('Current Turn Info:', turnInfo);
-            console.log('Turn Sequence:', turnSequence);
-            alert(`Current Turn: ${turnInfo.inTurnUnit.name} (${turnInfo.inTurnUnit.teamId})\nCan Move: ${turnInfo.canMove}\nCan Attack: ${turnInfo.canAttack}\nCan Heal: ${turnInfo.canHeal}`);
-        }
-    });
+    const showTurnInfoBtn = document.getElementById('show-turn-info-btn');
+    if (showTurnInfoBtn) {
+        showTurnInfoBtn.addEventListener('click', () => {
+            if (battleGraphics) {
+                const turnInfo = battleGraphics.getCurrentTurnInfo();
+                const turnSequence = battleGraphics.getTurnSequence();
+                console.log('Current Turn Info:', turnInfo);
+                console.log('Turn Sequence:', turnSequence);
+                alert(`Current Turn: ${turnInfo.inTurnUnit.name} (${turnInfo.inTurnUnit.teamId})\nCan Move: ${turnInfo.canMove}\nCan Attack: ${turnInfo.canAttack}\nCan Heal: ${turnInfo.canHeal}`);
+            }
+        });
+    }
 }
 
 // Chat functionality
@@ -457,12 +486,14 @@ function initializeChat() {
     const onlineCount = document.getElementById('online-count');
     
     // Toggle chat visibility
-    toggleButton.addEventListener('click', () => {
-        chatContainer.classList.toggle('hidden');
-        if (!chatContainer.classList.contains('hidden')) {
-            chatInput.focus();
-        }
-    });
+    if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+            chatContainer.classList.toggle('hidden');
+            if (!chatContainer.classList.contains('hidden')) {
+                chatInput.focus();
+            }
+        });
+    }
     
     // Send message
     function sendMessage() {
@@ -473,33 +504,46 @@ function initializeChat() {
         }
     }
     
-    sendButton.addEventListener('click', sendMessage);
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
+    if (sendButton) {
+        sendButton.addEventListener('click', sendMessage);
+    }
+    
+    if (chatInput) {
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    }
     
     // Change username
-    changeUsernameButton.addEventListener('click', () => {
-        const newUsername = usernameInput.value.trim();
-        if (newUsername && chatSocket) {
-            chatSocket.emit('user:change_username', { username: newUsername });
-            usernameInput.value = '';
-        }
-    });
+    if (changeUsernameButton) {
+        changeUsernameButton.addEventListener('click', () => {
+            const newUsername = usernameInput.value.trim();
+            if (newUsername && chatSocket) {
+                chatSocket.emit('user:change_username', { username: newUsername });
+                usernameInput.value = '';
+            }
+        });
+    }
     
     // Socket event handlers
     chatSocket.on('connect', () => {
         console.log('Connected to chat server');
-        chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Connected to chat server</div>';
+        if (chatMessages) {
+            chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Connected to chat server</div>';
+        }
     });
     
     chatSocket.on('user:connected', (data) => {
         currentUser = data;
         console.log('User connected:', data);
-        chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Welcome to the chat!</div>';
-        updateOnlineCount(data.onlineUsers.length);
+        if (chatMessages) {
+            chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Welcome to the chat!</div>';
+        }
+        if (onlineCount) {
+            updateOnlineCount(data.onlineUsers.length);
+        }
     });
     
     chatSocket.on('chat:messages', (messages) => {
@@ -512,12 +556,16 @@ function initializeChat() {
     
     chatSocket.on('user:joined', (data) => {
         addSystemMessage(`${data.username} joined the chat`);
-        updateOnlineCount(data.onlineUsers.length);
+        if (onlineCount) {
+            updateOnlineCount(data.onlineUsers.length);
+        }
     });
     
     chatSocket.on('user:left', (data) => {
         addSystemMessage(`${data.username} left the chat`);
-        updateOnlineCount(data.onlineUsers.length);
+        if (onlineCount) {
+            updateOnlineCount(data.onlineUsers.length);
+        }
     });
     
     chatSocket.on('user:username_changed', (data) => {
@@ -542,11 +590,14 @@ function initializeChat() {
     
     // Helper functions
     function displayMessages(messages) {
+        if (!chatMessages) return;
         chatMessages.innerHTML = '';
         messages.forEach(message => addMessage(message));
     }
     
     function addMessage(message) {
+        if (!chatMessages) return;
+        
         const messageDiv = document.createElement('div');
         messageDiv.className = 'mb-2';
         
@@ -567,6 +618,8 @@ function initializeChat() {
     }
     
     function addSystemMessage(message, type = 'info') {
+        if (!chatMessages) return;
+        
         const messageDiv = document.createElement('div');
         messageDiv.className = 'mb-2 text-center';
         
@@ -581,7 +634,9 @@ function initializeChat() {
     }
     
     function updateOnlineCount(count) {
-        onlineCount.textContent = `Online: ${count}`;
+        if (onlineCount) {
+            onlineCount.textContent = `Online: ${count}`;
+        }
     }
     
     function escapeHtml(text) {

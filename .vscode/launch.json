@@ -4,13 +4,12 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [        
-        // --- Cấu hình MỚI để debug client-side ---
         {
-            "type": "chrome", // Hoặc "msedge" nếu bạn dùng Edge
+            "type": "chrome", 
             "request": "launch",
             "name": "Debug Client-Side (Chrome)",
-            "url": "http://localhost:8000", // ✅ QUAN TRỌNG: URL của web bạn
-            "webRoot": "${workspaceFolder}" // Hoặc thư mục chứa file public, ví dụ: "${workspaceFolder}/public"
+            "url": "http://localhost:3000", 
+            "webRoot": "${workspaceFolder}" 
         },
         {
             "type": "node",

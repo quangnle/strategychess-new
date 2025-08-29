@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategy Chess</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+         <script>
+         tailwind.config = {
+             theme: {
+                 extend: {
+                     colors: {
+                         'blue-team': '#3B82F6',
+                         'red-team': '#EF4444',
+                     }
+                 }
+             }
+         }
+     </script>
+     <style>
+         /* Custom scrollbar styling */
+         #chat-messages::-webkit-scrollbar {
+             width: 8px;
+         }
+         
+         #chat-messages::-webkit-scrollbar-track {
+             background: #374151;
+             border-radius: 4px;
+         }
+         
+         #chat-messages::-webkit-scrollbar-thumb {
+             background: #6B7280;
+             border-radius: 4px;
+         }
+         
+         #chat-messages::-webkit-scrollbar-thumb:hover {
+             background: #9CA3AF;
+         }
+         
+         /* For Firefox */
+         #chat-messages {
+             scrollbar-width: thin;
+             scrollbar-color: #6B7280 #374151;
+         }
+     </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 py-4">
+        <div class="container mx-auto px-4">
+            <h1 class="text-3xl font-bold text-yellow-400 text-center">STRATEGY CHESS</h1>
+        </div>
+    </header>
+
+         <!-- Main Content Area -->
+     <main class="flex-1 container mx-auto px-4 py-8">
+         <div class="flex flex-col space-y-8">
+             <!-- Action Buttons Section -->
+             <div class="flex flex-col items-center space-y-6">
+                 <button id="challenge-friends-btn" 
+                         class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-6 px-8 rounded-lg text-xl transition-colors shadow-lg">
+                     CHALLENGE WITH FRIENDS
+                 </button>
+                 
+                 <button id="play-ai-btn" 
+                         class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-8 rounded-lg text-xl transition-colors shadow-lg">
+                     PLAY WITH AI
+                 </button>
+             </div>
+ 
+             <!-- Chat Panel Section -->
+             <div class="bg-gray-800 rounded-lg p-6">
+                 <div class="flex items-center justify-between mb-4">
+                     <h3 class="text-xl font-bold text-yellow-400">CHAT PANEL</h3>
+                     <span id="online-count" class="text-sm text-gray-300">Online: 0</span>
+                 </div>
+                 
+                 <div class="flex gap-4 h-96">
+                     <!-- Online Users List -->
+                     <div class="w-48 bg-gray-900 rounded p-4 border border-gray-600">
+                         <h4 class="text-sm font-semibold text-yellow-400 mb-3">Online Users</h4>
+                         <div id="online-users-list" class="space-y-2">
+                             <div class="text-center text-gray-500 text-xs">No users online</div>
+                         </div>
+                     </div>
+                     
+                     <!-- Chat Messages and Input -->
+                     <div class="flex-1 flex flex-col">
+                         <!-- Chat Messages -->
+                         <div id="chat-messages" class="flex-1 bg-gray-900 rounded p-4 overflow-y-auto mb-4 border border-gray-600">
+                             <div class="text-center text-gray-500 text-sm">Welcome to Strategy Chess! Start chatting...</div>
+                         </div>
+                         
+                         <!-- Chat Input -->
+                         <div class="flex space-x-2">
+                             <input type="text" id="chat-input" 
+                                    placeholder="Type your message..." 
+                                    class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
+                             <button id="send-message" 
+                                     class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                                 Send
+                             </button>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+         </div>
+     </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 border-t border-gray-700 py-4">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-gray-400">&copy; 2024 Strategy Chess. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script type="module" src="index.js"></script>
+</body>
+</html>

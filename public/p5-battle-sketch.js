@@ -1,7 +1,7 @@
-import { BOARD_COLS, BOARD_ROWS, UNIT_TYPES, SACRIFICE, HEAL } from './core-logic/definitions.js';
-import MatchInfo from './core-logic/match-info.js';
-import GameLogic from './core-logic/game-logic.js';
-import Processor from './ai-processor/processor.js';
+import { BOARD_COLS, BOARD_ROWS, UNIT_TYPES, SACRIFICE, HEAL } from '../core-logic/definitions.js';
+import MatchInfo from '../core-logic/match-info.js';
+import GameLogic from '../core-logic/game-logic.js';
+import Processor from '../ai-processor/processor.js';
 
 class P5BattleGraphics {
     constructor(matchInfo) {

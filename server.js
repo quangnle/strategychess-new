@@ -23,8 +23,8 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Serve static files with caching disabled for development
-app.use(express.static(__dirname, {
+// Serve static files from public folder with caching disabled for development
+app.use(express.static(path.join(__dirname, 'public'), {
     etag: false,
     lastModified: false,
     setHeaders: (res, path) => {
@@ -55,8 +55,8 @@ app.use((req, res, next) => {
 
 // Main route
 app.get('/', (req, res) => {
-    console.log('Serving index.html');
-    res.sendFile(path.join(__dirname, 'index.html'));
+    console.log('Serving index.html from public folder');
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Debug API endpoints
@@ -66,13 +66,15 @@ app.get('/api/debug', (req, res) => {
         timestamp: new Date().toISOString(),
         debugMode: isDebug,
         files: {
-            'index.html': require('fs').existsSync(path.join(__dirname, 'index.html')),
-            'index.js': require('fs').existsSync(path.join(__dirname, 'index.js')),
+            'index.html': require('fs').existsSync(path.join(__dirname, 'public', 'index.html')),
+            'index.js': require('fs').existsSync(path.join(__dirname, 'public', 'index.js')),
+            'p5-battle-sketch.js': require('fs').existsSync(path.join(__dirname, 'public', 'p5-battle-sketch.js')),
             'definitions.js': require('fs').existsSync(path.join(__dirname, 'core-logic/definitions.js')),
             'style.css': require('fs').existsSync(path.join(__dirname, 'style.css'))
         },
         directories: {
-            'imgs': require('fs').existsSync(path.join(__dirname, 'imgs')),
+            'public': require('fs').existsSync(path.join(__dirname, 'public')),
+            'imgs': require('fs').existsSync(path.join(__dirname, 'public', 'imgs')),
             'core-logic': require('fs').existsSync(path.join(__dirname, 'core-logic'))
         },
         environment: {
@@ -127,7 +129,7 @@ server.listen(PORT, () => {
     console.log('🚀 Strategy Chess Debug Server');
     console.log('='.repeat(50));
     console.log(`🌐 URL: http://localhost:${PORT}`);
-    console.log(`📁 Static files: ${__dirname}`);
+    console.log(`📁 Static files: ${path.join(__dirname, 'public')}`);
     console.log(`🔧 Debug mode: ${isDebug ? 'ENABLED' : 'DISABLED'}`);
     console.log(`🌐 CORS: ENABLED for all origins`);
     
