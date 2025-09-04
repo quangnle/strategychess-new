@@ -16,21 +16,24 @@ class P5BattleGraphics {
         
         // Canvas dimensions
         this.canvasWidth = 750;
-        this.canvasHeight = 600;
+        this.canvasHeight = 700; // Increased height for top panel
         
-        // Calculate cell size based on canvas dimensions
+        // Top panel dimensions
+        this.topPanelHeight = 100;
+        
+        // Calculate cell size based on canvas dimensions (excluding top panel)
         this.cellSize = Math.min(
             this.canvasWidth / BOARD_COLS,
-            this.canvasHeight / BOARD_ROWS
+            (this.canvasHeight - this.topPanelHeight) / BOARD_ROWS
         );
         
         // Calculate board dimensions
         this.boardWidth = BOARD_COLS * this.cellSize;
         this.boardHeight = BOARD_ROWS * this.cellSize;
         
-        // Position board on the left side
-        this.offsetX = 40;
-        this.offsetY = (this.canvasHeight - this.boardHeight) / 2;
+        // Position board in center (below top panel with 5px gap)
+        this.offsetX = (this.canvasWidth - this.boardWidth) / 2;
+        this.offsetY = this.topPanelHeight + 5 + (this.canvasHeight - this.topPanelHeight - 5 - this.boardHeight) / 2;
         
         // Load images
         this.images = {};
@@ -104,6 +107,9 @@ class P5BattleGraphics {
     }
     
     draw() {
+        // Clear canvas with background
+        this.p.background(51); // Dark gray background
+        
         // kiểm tra nếu game đã kết thúc
         const result = this.gameLogic.isGameEnd();
         if (result !== 0) {
@@ -111,18 +117,14 @@ class P5BattleGraphics {
             return;
         }
 
+        this.drawTopPanel();
         this.drawBoard();
         this.drawUnits();
         this.highlightReachableCells();
-        this.drawTurnInfo();
-        this.drawTurnSequence();
         this.drawRecentActions();
     }
-    
+
     drawBoard() {
-        // Clear canvas
-        this.p.background(51); // Dark gray background
-        
         // Draw alternating squares
         for (let row = 0; row < BOARD_ROWS; row++) {
             for (let col = 0; col < BOARD_COLS; col++) {
@@ -142,10 +144,10 @@ class P5BattleGraphics {
                 this.p.rect(x, y, this.cellSize, this.cellSize);
 
                 // Draw coordinate
-                this.p.fill(34);
-                this.p.textSize(8);
-                this.p.textAlign(this.p.CENTER, this.p.CENTER);
-                this.p.text(`${row},${col}`, x + this.cellSize / 2, y + this.cellSize / 2);
+                //this.p.fill(34);
+                //this.p.textSize(8);
+                //this.p.textAlign(this.p.CENTER, this.p.CENTER);
+                //this.p.text(`${row},${col}`, x + this.cellSize / 2, y + this.cellSize / 2);
             }
         }
     }
@@ -182,6 +184,19 @@ class P5BattleGraphics {
     drawUnit(unit, isBlueTeam) {
         const x = this.offsetX + unit.col * this.cellSize;
         const y = this.offsetY + unit.row * this.cellSize;
+        
+        // Check if this unit can be selected (belongs to current turn team and not ended turn)
+        const canBeSelected = unit.teamId === this.gameLogic.currentTurnTeamId && 
+                             !this.gameLogic.alreadyEndedTurnUnits.includes(unit) &&
+                             unit.name !== "Base";
+        
+        // Draw selection highlight if unit can be selected
+        if (canBeSelected) {
+            this.p.stroke(0, 255, 0); // Green border
+            this.p.strokeWeight(2);
+            this.p.noFill();
+            this.p.rect(x, y, this.cellSize, this.cellSize);
+        }
         
         // Get unit image
         const unitType = unit.armyType || unit.name;
@@ -266,9 +281,9 @@ class P5BattleGraphics {
     }
     
     highlightReachableCells() {
-        if (!this.gameLogic.currentTurnInfo) return;
+        if (!this.gameLogic.currentTurnUnit) return;
         
-        const currentUnit = this.gameLogic.currentTurnInfo.inTurnUnit;
+        const currentUnit = this.gameLogic.currentTurnUnit;
         if (!currentUnit || currentUnit.hp <= 0) return;
 
         // Get reachable cells for movement
@@ -321,163 +336,114 @@ class P5BattleGraphics {
         }
     }
     
-    drawTurnInfo() {
-        if (!this.gameLogic.currentTurnInfo) return;
-        
-        const currentUnit = this.gameLogic.currentTurnInfo.inTurnUnit;
-        if (!currentUnit || currentUnit.hp <= 0) return;
-        
-        // Highlight current unit's cell
-        const x = this.offsetX + currentUnit.col * this.cellSize;
-        const y = this.offsetY + currentUnit.row * this.cellSize;
-        
-        // Draw highlight border
-        this.p.stroke(221, 167, 0); // Gold color
-        this.p.strokeWeight(4);
-        this.p.noFill();
-        this.p.rect(x, y, this.cellSize, this.cellSize);
-    }
-    
-    drawTurnSequence() {
-        if (!this.gameLogic.turnSequence || this.gameLogic.turnSequence.length === 0) return;
-        
-        // Filter out dead units from turn sequence
-        const aliveTurnSequence = this.gameLogic.turnSequence.filter(unit => unit.hp > 0);
-        
-        if (aliveTurnSequence.length === 0) return;
-        
-        // Draw turn sequence panel on the right side
-        const panelX = this.offsetX + this.boardWidth + 20;
-        const panelY = this.offsetY;
-        const panelWidth = 120;
-        const panelHeight = this.boardHeight;
+
+    drawTopPanel() {
+        const panelX = this.offsetX;
+        const panelY = 0;
+        const panelWidth = this.boardWidth;
+        const panelHeight = this.topPanelHeight;
         
         // Panel background
-        this.p.fill(0, 0, 0, 204);
+        this.p.fill(60, 60, 60);
         this.p.noStroke();
         this.p.rect(panelX, panelY, panelWidth, panelHeight);
+        
+        // Panel border
+        this.p.stroke(255, 255, 0);
+        this.p.strokeWeight(3);
+        this.p.noFill();
+        this.p.rect(panelX, panelY, panelWidth, panelHeight);
+        
+        // Draw team panels
+        const teamPanelWidth = panelWidth / 3;
+        this.drawTeamPanel(this.matchInfo.team1, panelX, panelY, teamPanelWidth, panelHeight, true);
+        this.drawCurrentUnitPanel(panelX + teamPanelWidth, panelY, teamPanelWidth, panelHeight);
+        this.drawTeamPanel(this.matchInfo.team2, panelX + teamPanelWidth * 2, panelY, teamPanelWidth, panelHeight, false);
+    }
+
+    drawTeamPanel(team, x, y, width, height, isLeftTeam) {
+        // Panel background
+        const isCurrentTeam = team.teamId === this.gameLogic.currentTurnTeamId;
+        if (isCurrentTeam) {
+            this.p.fill(50, 50, 100); // Highlight current team bằng màu xanh lá
+        } else {
+            this.p.fill(40, 40, 40);
+        }
+        this.p.noStroke();
+        this.p.rect(x, y, width, height);
+        
+        // Panel border
+        this.p.stroke(isCurrentTeam ? 100 : 60);
+        this.p.strokeWeight(2);
+        this.p.noFill();
+        this.p.rect(x, y, width, height);
+        
+        // Team name and movement point
+        this.p.fill(255);
+        this.p.textSize(14);
+        this.p.textStyle(this.p.BOLD);
+        this.p.textAlign(this.p.CENTER, this.p.CENTER);
+        
+        const teamName = isLeftTeam ? "TEAM 1" : "TEAM 2";
+        const movementPoint = this.gameLogic._calculateTeamMovementPoint(team.teamId);
+        
+        this.p.text(teamName, x + width / 2, y + 15);
+        this.p.text(`Movement point: ${movementPoint}`, x + width / 2, y + 30);
+        
+        // Priority indicator
+        if (team.teamId === this.gameLogic.priorityTeamId) {
+            this.p.textSize(10);
+            this.p.text("Priority", x + width / 2, y + 45);
+        }
+    }
+
+    drawCurrentUnitPanel(x, y, width, height) {
+        // Panel background
+        this.p.fill(40, 40, 40);
+        this.p.noStroke();
+        this.p.rect(x, y, width, height);
         
         // Panel border
         this.p.stroke(102);
         this.p.strokeWeight(2);
         this.p.noFill();
-        this.p.rect(panelX, panelY, panelWidth, panelHeight);
+        this.p.rect(x, y, width, height);
         
         // Title
         this.p.fill(255);
-        this.p.textSize(16);
+        this.p.textSize(12);
         this.p.textStyle(this.p.BOLD);
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.text('Turn Sequence', panelX + panelWidth / 2, panelY + 25);
+        this.p.text("CURRENT UNIT", x + width / 2, y + 12);
         
-        // Draw unit images and HP bars
-        const imageSize = 30;
-        const spacing = 45;
-        const startY = panelY + 40;
-        
-        aliveTurnSequence.forEach((unit, index) => {
-            const imgY = startY + index * spacing;
-            const imgX = panelX + 10;
+        // Draw current unit if selected
+        if (this.gameLogic.currentTurnUnit) {
+            const unit = this.gameLogic.currentTurnUnit;
+            const unitSize = 35;
+            const unitX = x + width / 2 - unitSize / 2;
+            const unitY = y + 25;
             
-            // Get unit image
+            // Draw unit image
             const unitType = unit.armyType || unit.name;
-            const imageKey = `${unitType}_${unit.teamId === this.matchInfo.team1.teamId ? 'blue' : 'red'}`;
+            const isBlueTeam = unit.teamId === this.matchInfo.team1.teamId;
+            const imageKey = `${unitType}_${isBlueTeam ? 'blue' : 'red'}`;
             
             if (this.images[imageKey]) {
-                // Draw unit image
-                this.p.image(this.images[imageKey], imgX, imgY + 3, imageSize, imageSize);
-                
-                // Draw HP bar
-                this.drawTurnSequenceHPBar(unit, imgX + imageSize + 5, imgY + 5, 70);
-                
-                // Draw speed information
-                this.drawTurnSequenceSpeed(unit, imgX + imageSize + 5, imgY + 25, 70);
-                
-                // Draw effects information
-                this.drawTurnSequenceEffects(unit, imgX + imageSize + 5, imgY + 35, 70);
+                this.p.image(this.images[imageKey], unitX, unitY, unitSize, unitSize);
             }
-        });
-    }
-    
-    drawTurnSequenceHPBar(unit, x, y, width) {
-        const barHeight = 10;
-        
-        // Background
-        this.p.fill(102);
-        this.p.noStroke();
-        this.p.rect(x, y, width, barHeight);
-        
-        // HP bar
-        const maxHp = UNIT_TYPES[unit.armyType || unit.name]?.hp || 5;
-        const hpPercentage = unit.hp / maxHp;
-        const hpWidth = width * hpPercentage;
-        
-        let hpColor;
-        if (hpPercentage > 0.5) {
-            hpColor = this.p.color(34, 197, 94); // Green
-        } else if (hpPercentage > 0.25) {
-            hpColor = this.p.color(245, 158, 11); // Orange
+            
+            // Unit name and speed
+            this.p.textSize(9);
+            this.p.text(unit.name, x + width / 2, y + 65);
+            this.p.text(`Speed: ${unit.speed}`, x + width / 2, y + 78);
         } else {
-            hpColor = this.p.color(239, 68, 68); // Red
+            // No unit selected
+            this.p.textSize(9);
+            this.p.text("No unit selected", x + width / 2, y + 45);
         }
-        
-        this.p.fill(hpColor);
-        this.p.rect(x, y, hpWidth, barHeight);
-        
-        // HP text
-        this.p.fill(0, 0, 255);
-        this.p.textSize(8);
-        this.p.textAlign(this.p.LEFT, this.p.CENTER);
-        this.p.text(`${unit.hp}/${maxHp}`, x + 2, y + 0.7 * barHeight);
     }
+
     
-    drawTurnSequenceSpeed(unit, x, y, width) {
-        // Get unit speed from definitions
-        const unitType = unit.armyType || unit.name;
-        const baseSpeed = UNIT_TYPES[unitType]?.speed || 0;
-        
-        // Check if unit has speed modifications from effects
-        let currentSpeed = baseSpeed;
-        if (unit.effects && unit.effects.length > 0) {
-            const dashEffect = unit.effects.find(e => e.name === 'dash');
-            if (dashEffect && dashEffect.value) {
-                currentSpeed += dashEffect.value;
-            }
-        }
-        
-        // Draw speed text
-        this.p.textSize(9);
-        this.p.textAlign(this.p.LEFT, this.p.CENTER);
-        
-        // Show speed with modification indicator if different from base
-        if (currentSpeed !== baseSpeed) {
-            this.p.fill(255, 215, 0); // Gold color for modified speed
-            this.p.text(`⚡ ${currentSpeed} (${baseSpeed}+${currentSpeed - baseSpeed})`, x, y);
-        } else {
-            this.p.fill(255);
-            this.p.text(`⚡ ${currentSpeed}`, x, y);
-        }
-    }
-    
-    drawTurnSequenceEffects(unit, x, y, width) {
-        // Draw active effects
-        this.p.fill(255, 165, 0); // Orange for active effects
-        this.p.textSize(8);
-        this.p.textAlign(this.p.LEFT, this.p.CENTER);
-        
-        const effectTexts = unit.effects.map(effect => {
-            let text = effect.name;
-            if (effect.duration && effect.duration > 0) {
-                text += `(${effect.duration})`;
-            }
-            if (effect.value) {
-                text += `+${effect.value}`;
-            }
-            return text;
-        });
-        
-        this.p.text(`🔮 ${effectTexts.join(', ')}`, x, y);
-    }
 
     drawRecentActions() {
         this.recentActions.forEach(action => {
@@ -500,9 +466,9 @@ class P5BattleGraphics {
 
     drawGameEndInfoBoard(result) {
         // Draw game end info board on the center of the canvas
-        const panelX = this.offsetX + this.boardWidth + 20;
+        const panelX = this.offsetX;
         const panelY = this.offsetY;
-        const panelWidth = 120;
+        const panelWidth = this.boardWidth;
         const panelHeight = this.boardHeight;
 
         // Panel background
@@ -518,21 +484,33 @@ class P5BattleGraphics {
 
         // Title
         this.p.fill(255);
-        this.p.textSize(16);
+        this.p.textSize(24);
         this.p.textStyle(this.p.BOLD);
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.text('Game End', panelX + panelWidth / 2, panelY + 25);
+        this.p.text('Game End', panelX + panelWidth / 2, panelY + panelHeight / 2 - 20);
 
         // Draw game end info
         const labelText = result === 1 ? 'Team 1 wins!' : result === 2 ? 'Team 2 wins!' : 'Draw!';
         this.p.fill(255);
-        this.p.textSize(14);
+        this.p.textSize(18);
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.text(labelText, panelX + panelWidth / 2, panelY + 40);
-
+        this.p.text(labelText, panelX + panelWidth / 2, panelY + panelHeight / 2 + 20);
     }
     
+    canSelectUnit(unit) {
+        return unit.teamId === this.gameLogic.currentTurnTeamId && 
+               !this.gameLogic.alreadyEndedTurnUnits.includes(unit) &&
+               unit.name !== "Base" &&
+               unit.hp > 0;
+    }
+
     handleCanvasClick(mouseX, mouseY) {
+        // Check if click is within the top panel area
+        if (mouseY < this.topPanelHeight) {
+            this.handleTopPanelClick(mouseX, mouseY);
+            return;
+        }
+        
         // Check if click is within the board area
         if (mouseX < this.offsetX || mouseX > this.offsetX + this.boardWidth ||
             mouseY < this.offsetY || mouseY > this.offsetY + this.boardHeight) {
@@ -545,19 +523,64 @@ class P5BattleGraphics {
         
         // Get unit at clicked position
         const clickedUnit = this.gameLogic._getUnitByPosition(row, col);
-        const currentUnit = this.gameLogic.currentTurnInfo?.inTurnUnit;
+        const currentUnit = this.gameLogic.currentTurnUnit;
         
-        if (!currentUnit) return; // No current unit
+        // Case 1: No current unit selected - try to select a unit
+        if (!currentUnit) {
+            if (clickedUnit && this.canSelectUnit(clickedUnit)) {
+                this.gameLogic.currentTurnUnit = clickedUnit;
+                console.log(`Selected unit: ${clickedUnit.name}`);
+            }
+            return;
+        }
         
-        // Case 1: Clicked on empty cell
+        // Case 2: Clicked on empty cell
         if (!clickedUnit) {
             this.handleEmptyCellClick(row, col, currentUnit);
         }
-        // Case 2: Clicked on a unit
+        // Case 3: Clicked on a unit
         else {
-            this.handleUnitClick(clickedUnit, currentUnit);
+            // Check if clicked unit is selectable (has green border)
+            if (this.canSelectUnit(clickedUnit)) {
+                // Check if current unit can perform any action on clicked unit
+                const canHeal = this.gameLogic.getHealableTargets(currentUnit).some(target => target.id === clickedUnit.id);
+                const canSacrifice = this.gameLogic.getSacrificeableTargets(currentUnit).some(target => target.id === clickedUnit.id);
+                const canSuicide = clickedUnit.id === currentUnit.id;
+                
+                if (canHeal || canSacrifice || canSuicide) {
+                    // Current unit can perform action on clicked unit - execute action
+                    this.handleUnitClick(clickedUnit, currentUnit);
+                } else {
+                    // Current unit cannot perform any action - switch to clicked unit
+                    this.gameLogic.currentTurnUnit = clickedUnit;
+                    console.log(`Switched to unit: ${clickedUnit.name}`);
+                }
+            } else {
+                // Clicked unit is not selectable - handle as normal unit click
+                this.handleUnitClick(clickedUnit, currentUnit);
+            }
         }
     }
+
+    handleTopPanelClick(mouseX, mouseY) {
+        // Check if click is within the top panel area (aligned with board)
+        if (mouseX < this.offsetX || mouseX > this.offsetX + this.boardWidth) {
+            return; // Click outside top panel
+        }
+        
+        const teamPanelWidth = this.boardWidth / 3;
+        const panelStartX = this.offsetX;
+        
+        // Check if click is in current unit panel (middle)
+        if (mouseX >= panelStartX + teamPanelWidth && mouseX < panelStartX + teamPanelWidth * 2) {
+            // Click on current unit panel - deselect if unit is selected
+            if (this.gameLogic.currentTurnUnit) {
+                this.gameLogic.currentTurnUnit = null;
+                console.log('Deselected unit');
+            }
+        }
+    }
+
     
     handleEmptyCellClick(row, col, currentUnit) {
         // Check if the cell is reachable for movement
@@ -585,6 +608,7 @@ class P5BattleGraphics {
 
                 // nếu không có action nào thì tự động chuyển sang turn của unit khác
                 if (!canAttack && !canHeal && !canSacrifice) {
+                    console.log('No valid action for current unit, switching to next turn');
                     this.gameLogic.newTurn();
                 }
             }
@@ -605,6 +629,7 @@ class P5BattleGraphics {
                     return;
                 }
 
+                console.log('Suicide executed, switching to next turn');
                 this.gameLogic.newTurn();
             }
             return;
@@ -634,6 +659,7 @@ class P5BattleGraphics {
                     return;
                 }
 
+                console.log('Heal executed, switching to next turn');
                 this.gameLogic.newTurn();
             }
             return;
@@ -656,6 +682,7 @@ class P5BattleGraphics {
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
 
+                this.gameLogic.endTurn();
                 this.gameLogic.newTurn();
             }
             return;
@@ -678,6 +705,7 @@ class P5BattleGraphics {
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
 
+                console.log('Sacrifice executed, switching to next turn');
                 this.gameLogic.newTurn();
             }
             return;
@@ -688,8 +716,14 @@ class P5BattleGraphics {
     }
     
     handleKeyPress(key) {
+        if (key === 'Escape') {
+            // Deselect current unit
+            this.gameLogic.currentTurnUnit = null;
+            return;
+        }
+        
         if (key === 'd' || key === 'D') {
-            const currentUnit = this.gameLogic.currentTurnInfo?.inTurnUnit;
+            const currentUnit = this.gameLogic.currentTurnUnit;
             if (currentUnit) {
                 const results = this.processor.evaluatePositions(currentUnit);
                 console.log('Current Unit:', currentUnit.name, 'at', currentUnit.row, currentUnit.col);
@@ -762,6 +796,7 @@ class P5BattleGraphics {
                 }
 
                 // tự động chuyển sang turn của unit khác
+                console.log('No valid action for current unit, switching to next turn');
                 this.gameLogic.newTurn();
             } else {
                 console.log('No current unit to evaluate');
@@ -781,12 +816,7 @@ class P5BattleGraphics {
     
     // Method to get current turn info
     getCurrentTurnInfo() {
-        return this.gameLogic.currentTurnInfo;
-    }
-    
-    // Method to get turn sequence
-    getTurnSequence() {
-        return this.gameLogic.turnSequence;
+        return this.gameLogic.getCurrentTurnInfo();
     }
 }
 

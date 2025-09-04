@@ -4,17 +4,26 @@ class GameLogic {
     constructor(matchInfo) {
         this.matchInfo = matchInfo;
         this.roundNo = 0;
-        this.turnSequence = [];        
-        this.currentTurnInfo = null;        
         this.priorityTeamId = matchInfo.team1.teamId;
         this.alreadyEndedTurnUnits = [];
+        this.currentTurnUnit = null; // unit đang thực hiện turn hiện tại
+        this.currentTurnTeamId = null; // team đang có quyền thực hiện turn
+        this.currentTurnActions = {
+            hasMoved: false,
+            hasAttacked: false,
+            hasHealed: false,
+            hasSacrificed: false,
+            hasSuicided: false
+        };
     }
 
     startMatch() {
         this.roundNo = 0;
-        // tạo turn sequence
-        this._setupTurnSequence();
-        this.currentTurnInfo = { inTurnUnit: this.turnSequence[0], canMove: true, canAttack: true, canHeal: true };
+        this.alreadyEndedTurnUnits = [];
+        this.currentTurnUnit = null;
+        this.currentTurnTeamId = null;
+        this._resetTurnActions();
+        this._selectNextTeam();
     }    
 
     newTurn() {
@@ -25,24 +34,12 @@ class GameLogic {
         this._berserkEffect();
         
         // đưa unit đang turn vào danh sách đã end turn
-        this.alreadyEndedTurnUnits.push(this.currentTurnInfo.inTurnUnit);
-        // tính toán lại turn sequence
-        this._setupTurnSequence();
-
-        // tìm index của unit trong turn hiện tại
-        // bằng cách duyệt qua turn sequence và kiểm ra index đầu tiên không phải là unit đã end turn
-        let index = 0;
-        while (index < this.turnSequence.length) {
-            if (this.alreadyEndedTurnUnits.includes(this.turnSequence[index])) {
-                index++;
-            } else {
-                break;
-            }
+        if (this.currentTurnUnit) {
+            this.alreadyEndedTurnUnits.push(this.currentTurnUnit);
         }
 
-        // nếu index bằng turn sequence length nghĩa là toàn bộ các unit đã end turn
-        // thì tăng round lên 1 nghĩa là thực hiện round mới
-        if (index === this.turnSequence.length) {
+        // kiểm tra xem có phải round mới không
+        if (this._isRoundComplete()) {
             this.roundNo++;
             // thực hiện giảm trừ duration của các effect có duration
             this._reduceEffectDuration();
@@ -52,29 +49,90 @@ class GameLogic {
 
             // chuyển priority team id
             this.priorityTeamId = this.priorityTeamId === this.matchInfo.team1.teamId ? this.matchInfo.team2.teamId : this.matchInfo.team1.teamId;
-            // tính toán lại turn sequence
-            this._setupTurnSequence();
-            // reset index
-            index = 0;
         }
 
-        // cập nhật unit đang turn là unit đầu tiên trong turn sequence
-        this.currentTurnInfo.inTurnUnit = this.turnSequence[index];
-        this.currentTurnInfo.canMove = true;
-        this.currentTurnInfo.canAttack = true;
-        this.currentTurnInfo.canHeal = true;  
+        // chọn team tiếp theo để thực hiện turn
+        this._selectNextTeam();
+        
+        // reset turn actions
+        this._resetTurnActions();
+    }
 
-        // kiểm tra xem unit đang turn có effect ADJACENT_PENALTY không
-        const isAdjacentByEnemy = this._isAdjacentByEnemy(this.currentTurnInfo.inTurnUnit);
-        if (isAdjacentByEnemy && this.currentTurnInfo.inTurnUnit.abilities.includes(ADJACENT_PENALTY)) {
-            // nếu có thì apply effect ADJACENT_PENALTY lên chính unit này
-            this.currentTurnInfo.inTurnUnit.effects.push({ name: ADJACENT_PENALTY });
-            // không thể tấn công nếu bị ADJACENT_PENALTY
-            this.currentTurnInfo.canAttack = false;
+    // Chọn team tiếp theo dựa trên movement point
+    _selectNextTeam() {
+        const team1MovementPoint = this._calculateTeamMovementPoint(this.matchInfo.team1.teamId);
+        const team2MovementPoint = this._calculateTeamMovementPoint(this.matchInfo.team2.teamId);
+
+        if (team1MovementPoint > team2MovementPoint) {
+            this.currentTurnTeamId = this.matchInfo.team1.teamId;
+        } else if (team2MovementPoint > team1MovementPoint) {
+            this.currentTurnTeamId = this.matchInfo.team2.teamId;
         } else {
-            // nếu không thì loại bỏ effect ADJACENT_PENALTY khỏi unit này
-            this.currentTurnInfo.inTurnUnit.effects = this.currentTurnInfo.inTurnUnit.effects.filter(e => e.name !== ADJACENT_PENALTY);
-        }     
+            // Nếu bằng nhau, team có priority được ưu tiên
+            this.currentTurnTeamId = this.priorityTeamId;
+        }
+
+        // Reset currentTurnUnit khi chọn team mới
+        this.currentTurnUnit = null;
+    }
+
+    // Tính movement point cho một team
+    _calculateTeamMovementPoint(teamId) {
+        const team = this._getTeamById(teamId);
+        const aliveUnits = team.units.filter(u => u.hp > 0 && u.name !== "Base");
+        const notYetEndedTurnUnits = aliveUnits.filter(u => !this.alreadyEndedTurnUnits.includes(u));
+        return notYetEndedTurnUnits.reduce((total, unit) => total + this._getCurrentSpeed(unit), 0);
+    }
+
+    // Kiểm tra xem round có hoàn thành chưa
+    _isRoundComplete() {
+        const allUnits = this._getAllUnits().filter(u => u.hp > 0 && u.name !== "Base");
+        return allUnits.every(unit => this.alreadyEndedTurnUnits.includes(unit));
+    }
+
+    // Reset các action của turn hiện tại
+    _resetTurnActions() {
+        this.currentTurnActions = {
+            hasMoved: false,
+            hasAttacked: false,
+            hasHealed: false,
+            hasSacrificed: false,
+            hasSuicided: false
+        };
+    }
+
+    // Kiểm tra xem unit có được phép thực hiện action không
+    _canPerformAction(actionType) {
+        if (!this.currentTurnUnit) {
+            return false;
+        }
+
+        // Kiểm tra xem action đã được thực hiện chưa
+        if (this.currentTurnActions[`has${actionType}`]) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Kiểm tra xem unit có được phép thực hiện action không (cho trường hợp chưa có currentTurnUnit)
+    _canPerformActionWithoutCurrentUnit(unit, actionType) {
+        // Kiểm tra xem unit có thuộc team đang có quyền không
+        if (unit.teamId !== this.currentTurnTeamId) {
+            return false;
+        }
+
+        // Kiểm tra xem unit đã end turn chưa
+        if (this.alreadyEndedTurnUnits.includes(unit)) {
+            return false;
+        }
+
+        // Kiểm tra xem unit có còn sống không
+        if (unit.hp <= 0) {
+            return false;
+        }
+
+        return true;
     }
     
     makeMove(unit, row, col) {
@@ -83,20 +141,14 @@ class GameLogic {
             return false;
         }
 
-        // kiểm tra unit này có phải là unit đang turn không
-        if (unit.id !== this.currentTurnInfo.inTurnUnit.id) {
-            return false;
-        }
-
-        // kiểm tra xem unit này có move được không
-        if (!this.currentTurnInfo.canMove) {
+        // Kiểm tra xem unit có được phép di chuyển dựa trên movement point của team không
+        if (!this._canPerformActionWithoutCurrentUnit(unit, 'Moved')) {
             return false;
         }
 
         // check if unit has effect LOCK in the effect list
         const effect = unit.effects.find(e => e.name === LOCK);
         if (effect) {            
-            this.currentTurnInfo.canMove = false;
             // giảm trừ duration của effect
             effect.duration -= 1;
             // loại bỏ effect có duration bằng 0
@@ -109,7 +161,6 @@ class GameLogic {
         const reachableCells = this.getReachableCells(unit);
         const isReachable = reachableCells.some(cell => cell.row === row && cell.col === col);
         if (!isReachable) {
-            this.currentTurnInfo.canMove = false;
             return false;
         }
 
@@ -125,13 +176,13 @@ class GameLogic {
         const isAdjacentByEnemy = this._isAdjacentByEnemy(unit);
         if (isAdjacentByEnemy && unit.abilities.includes(ADJACENT_PENALTY)) {
             unit.effects.push({ name: ADJACENT_PENALTY });
-
-            // không thể tấn công nếu bị ADJACENT_PENALTY
-            this.currentTurnInfo.canAttack = false;
         }
 
-        // update current turn info
-        this.currentTurnInfo.canMove = false;
+        // Lưu lại currentTurnUnit khi unit được phép di chuyển
+        this.currentTurnUnit = unit;
+        
+        // update turn actions
+        this.currentTurnActions.hasMoved = true;
         return true;
     }
 
@@ -141,27 +192,34 @@ class GameLogic {
             return false;
         }
 
-        // kiểm tra unit này có phải là unit đang turn không
-        if (unit.id !== this.currentTurnInfo.inTurnUnit.id) {
-            return false;
-        }
-
-        // kiểm tra xem unit có attack được không
-        if (!this.currentTurnInfo.canAttack) {
-            return false;
+        // Kiểm tra xem unit có được phép tấn công không
+        if (this.currentTurnUnit) {
+            // Nếu currentTurnUnit đã tồn tại, kiểm tra xem unit có phải là currentTurnUnit không
+            if (unit.id !== this.currentTurnUnit.id) {
+                return false;
+            }
+            // Kiểm tra xem unit có attack được không
+            if (!this._canPerformAction('Attacked')) {
+                return false;
+            }
+        } else {
+            // Nếu currentTurnUnit chưa tồn tại, kiểm tra xem unit có thuộc team đang có quyền không
+            if (!this._canPerformActionWithoutCurrentUnit(unit, 'Attacked')) {
+                return false;
+            }
+            // Set currentTurnUnit
+            this.currentTurnUnit = unit;
         }
 
         // kiểm tra xem unit có effect ADJACENT_PENALTY không
         const effect = unit.effects.find(e => e.name === ADJACENT_PENALTY);
         if (effect) {
-            this.currentTurnInfo.canAttack = false;
             return false;
         }
 
         // kiểm tra xem target có trong phạm vi tấn công của unit không
         const attackableTargets = this._getEnemiesWithinRange(unit, unit.range);
         if (!attackableTargets.includes(target)) {
-            this.currentTurnInfo.canAttack = false;
             return false;
         }
 
@@ -172,6 +230,8 @@ class GameLogic {
             this._normalAttack(unit, target);
         }
 
+        // update turn actions
+        this.currentTurnActions.hasAttacked = true;
         return true;
     }
 
@@ -181,14 +241,23 @@ class GameLogic {
             return false;
         }
 
-        // kiểm tra xem unit có phải là unit đang turn không
-        if (unit.id !== this.currentTurnInfo.inTurnUnit.id) {
-            return false;
-        }
-
-        // kiểm tra xem unit có heal được không
-        if (!this.currentTurnInfo.canHeal) {
-            return false;
+        // Kiểm tra xem unit có được phép heal không
+        if (this.currentTurnUnit) {
+            // Nếu currentTurnUnit đã tồn tại, kiểm tra xem unit có phải là currentTurnUnit không
+            if (unit.id !== this.currentTurnUnit.id) {
+                return false;
+            }
+            // Kiểm tra xem unit có heal được không
+            if (!this._canPerformAction('Healed')) {
+                return false;
+            }
+        } else {
+            // Nếu currentTurnUnit chưa tồn tại, kiểm tra xem unit có thuộc team đang có quyền không
+            if (!this._canPerformActionWithoutCurrentUnit(unit, 'Healed')) {
+                return false;
+            }
+            // Set currentTurnUnit
+            this.currentTurnUnit = unit;
         }
 
         // kiểm tra xem unit có ability HEAL không
@@ -199,16 +268,14 @@ class GameLogic {
         // kiểm tra xem target có trong phạm vi heal của unit không
         const healableTargets = this._getAlliesWithinRange(unit, unit.magicRange);
         if (!healableTargets.includes(target)) {
-            this.currentTurnInfo.canHeal = false;
             return false;
         }
 
         // update unit hp
         target.hp += 1;
-        this.currentTurnInfo.canMove = false;
-        this.currentTurnInfo.canAttack = false;
-        this.currentTurnInfo.canHeal = false;
-
+        
+        // update turn actions
+        this.currentTurnActions.hasHealed = true;
         return true;
     }
 
@@ -218,14 +285,23 @@ class GameLogic {
             return false;
         }
 
-        // kiểm tra xem unit có phải là unit đang turn không
-        if (unit.id !== this.currentTurnInfo.inTurnUnit.id) {
-            return false;
-        }
-
-        // kiểm tra xem unit có sacrifice được không
-        if (!this.currentTurnInfo.canAttack) {
-            return false;
+        // Kiểm tra xem unit có được phép sacrifice không
+        if (this.currentTurnUnit) {
+            // Nếu currentTurnUnit đã tồn tại, kiểm tra xem unit có phải là currentTurnUnit không
+            if (unit.id !== this.currentTurnUnit.id) {
+                return false;
+            }
+            // Kiểm tra xem unit có sacrifice được không
+            if (!this._canPerformAction('Sacrificed')) {
+                return false;
+            }
+        } else {
+            // Nếu currentTurnUnit chưa tồn tại, kiểm tra xem unit có thuộc team đang có quyền không
+            if (!this._canPerformActionWithoutCurrentUnit(unit, 'Sacrificed')) {
+                return false;
+            }
+            // Set currentTurnUnit
+            this.currentTurnUnit = unit;
         }
 
         // kiểm tra xem unit có ability SACRIFICE không
@@ -248,10 +324,9 @@ class GameLogic {
         // thực hiện sacrifice
         unit.hp -= 1;
         target.hp += 1;
-        this.currentTurnInfo.canMove = false;
-        this.currentTurnInfo.canAttack = false;
-        this.currentTurnInfo.canHeal = false;
-
+        
+        // update turn actions
+        this.currentTurnActions.hasSacrificed = true;
         return true;
     }
 
@@ -261,14 +336,23 @@ class GameLogic {
             return false;
         }
 
-        // kiểm tra xem unit có phải là unit đang turn không
-        if (unit.id !== this.currentTurnInfo.inTurnUnit.id) {
-            return false;
-        }
-
-        // kiểm tra xem unit có suicide được không
-        if (!this.currentTurnInfo.canAttack) {
-            return false;
+        // Kiểm tra xem unit có được phép suicide không
+        if (this.currentTurnUnit) {
+            // Nếu currentTurnUnit đã tồn tại, kiểm tra xem unit có phải là currentTurnUnit không
+            if (unit.id !== this.currentTurnUnit.id) {
+                return false;
+            }
+            // Kiểm tra xem unit có suicide được không
+            if (!this._canPerformAction('Suicided')) {
+                return false;
+            }
+        } else {
+            // Nếu currentTurnUnit chưa tồn tại, kiểm tra xem unit có thuộc team đang có quyền không
+            if (!this._canPerformActionWithoutCurrentUnit(unit, 'Suicided')) {
+                return false;
+            }
+            // Set currentTurnUnit
+            this.currentTurnUnit = unit;
         }
 
         // kiểm tra xem unit có ability SUICIDE không
@@ -289,12 +373,20 @@ class GameLogic {
         const adjacentUnits = adjacentCells.map(cell => this._getUnitByPosition(cell.row, cell.col)).filter(u => u && u.hp > 0);
         // giảm hp của tất cả các unit trong 8 ô xung quanh unit
         adjacentUnits.forEach(u => u.hp -= 1);        
-        // chuyển sang turn tiếp theo
-        this.currentTurnInfo.canMove = false;
-        this.currentTurnInfo.canAttack = false;
-        this.currentTurnInfo.canHeal = false;
-
+        
+        // update turn actions
+        this.currentTurnActions.hasSuicided = true;
         return true;
+    }
+
+    // End turn cho unit hiện tại
+    endTurn() {
+        if (this.currentTurnUnit) {
+            this.alreadyEndedTurnUnits.push(this.currentTurnUnit);
+            this.currentTurnUnit = null;
+            this.currentTurnTeamId = null;
+            this._resetTurnActions();
+        }
     }
 
     isGameEnd() {        
@@ -334,8 +426,13 @@ class GameLogic {
     }
 
     getAttackableTargets(unit) {
-        // kiểm tra xem unit có can attack được không
-        if (!this.currentTurnInfo.canAttack) {
+        // kiểm tra xem unit có phải là unit đang turn không
+        if (unit.id !== this.currentTurnUnit?.id) {
+            return [];
+        }
+
+        // kiểm tra xem unit có attack được không
+        if (this.currentTurnActions.hasAttacked) {
             return [];
         }
 
@@ -344,6 +441,16 @@ class GameLogic {
     }
 
     getHealableTargets(unit) {
+        // kiểm tra xem unit có phải là unit đang turn không
+        if (unit.id !== this.currentTurnUnit?.id) {
+            return [];
+        }
+
+        // kiểm tra xem unit có heal được không
+        if (this.currentTurnActions.hasHealed) {
+            return [];
+        }
+
         // kiểm tra xem unit có ability HEAL không
         if (!unit.abilities.includes(HEAL)) {
             return [];
@@ -356,6 +463,16 @@ class GameLogic {
     }
 
     getSacrificeableTargets(unit) {
+        // kiểm tra xem unit có phải là unit đang turn không
+        if (unit.id !== this.currentTurnUnit?.id) {
+            return [];
+        }
+
+        // kiểm tra xem unit có sacrifice được không
+        if (this.currentTurnActions.hasSacrificed) {
+            return [];
+        }
+
         // kiểm tra xem unit có ability SACRIFICE không
         if (!unit.abilities.includes(SACRIFICE)) {
             return [];
@@ -376,6 +493,17 @@ class GameLogic {
 
         // nếu không thì dùng BFS để tìm reachable cells
         return this._getReachableCellsBFS(unit, this._getCurrentSpeed(unit));        
+    }
+
+    // Lấy thông tin turn hiện tại
+    getCurrentTurnInfo() {
+        return {
+            currentTurnUnit: this.currentTurnUnit,
+            currentTurnTeamId: this.currentTurnTeamId,
+            currentTurnActions: { ...this.currentTurnActions },
+            priorityTeamId: this.priorityTeamId,
+            roundNo: this.roundNo
+        };
     }
 
     // HELPER FUNCTIONS
@@ -409,49 +537,6 @@ class GameLogic {
         }
         
         return speed;
-    }
-
-    _setupTurnSequence() {
-        let allUnits = this._getAllUnits();    
-        allUnits = allUnits.filter(u => u.hp > 0); // lọc ra các unit còn sống
-
-        // sắp xếp turn sequence theo speed
-        // team nào được ưu tiên thì đứng trước
-        const priorityTeamId = this.priorityTeamId;
-        allUnits.sort((a, b) => {
-            // apply dash effect cho unit a và b
-            let aSpeed = this._getCurrentSpeed(a);
-            let bSpeed = this._getCurrentSpeed(b);            
-
-            if (aSpeed === bSpeed) {
-                return priorityTeamId === a.teamId ? -1 : 1;
-            }
-            return (bSpeed - aSpeed > 0) ? 1 : -1;
-        });        
-
-        // xen kẽ
-        const seq = [];
-        let curSpeed = this._getCurrentSpeed(allUnits[0]);
-        let subSeq = [];
-        for (let i = 0; i < allUnits.length; i++) {
-            if (this._getCurrentSpeed(allUnits[i]) === curSpeed) { // chọn ra tất cả các unit có cùng speed
-                subSeq.push(allUnits[i]);
-            } else {
-                subSeq = this._makeAlternativeList(subSeq); // xen kẽ
-                seq.push(...subSeq); // thêm phần còn lại vào
-
-                // reset subSeq với unit đầu tiên
-                subSeq = [allUnits[i]];                 
-                // cập nhật curSpeed
-                curSpeed = this._getCurrentSpeed(allUnits[i]);                
-            }
-        }        
-        if (subSeq.length > 0) { // xử lý phần còn lại
-            subSeq = this._makeAlternativeList(subSeq); 
-            seq.push(...subSeq); 
-        }
-        // loại base khỏi turn sequence
-        this.turnSequence = seq.filter(u => u.hp > 0 && u.name !== "Base");
     }
 
     _getReachableCellsMahattan(unit, range) {
@@ -553,19 +638,10 @@ class GameLogic {
         if (!unit.effects.find(e => e.name === DASH)) {
             unit.effects.push({ name: DASH, duration: 2, value: 1 });
         }
-
-        // update lại trạng thái của unit
-        this.currentTurnInfo.canMove = false;
-        this.currentTurnInfo.canAttack = false;
-        this.currentTurnInfo.canHeal = false;
     }
 
     _normalAttack(unit, target) {
         target.hp -= 1;
-        // update lại trạng thái của unit
-        this.currentTurnInfo.canMove = false;
-        this.currentTurnInfo.canAttack = false;
-        this.currentTurnInfo.canHeal = false;
     }
 
     _reduceEffectDuration() {
@@ -636,22 +712,6 @@ class GameLogic {
         if (!unit) return null; // standardize thành null
         
         return unit;
-    }
-
-    // sắp xếp xen kẽ
-    _makeAlternativeList(list) {
-        if (list.length <= 1) {
-            return list;
-        }
-        let start = 0;
-        let end = list.length - 1;
-        while (start < end && list[start].teamId !== list[end].teamId) {
-            // mang list[end] insert vào giữa vị trí start và start + 1
-            list.splice(start + 1, 0, list[end]);
-            list.pop();
-            start += 2;
-        }
-        return list;
     }
 
     // kiểm tra xem unit có đứng cạnh enemy còn sống không

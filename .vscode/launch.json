@@ -9,7 +9,13 @@
             "request": "launch",
             "name": "Debug Client-Side (Chrome)",
             "url": "http://localhost:3000", 
-            "webRoot": "${workspaceFolder}" 
+            "webRoot": "${workspaceFolder}",
+            "sourceMaps": true,
+            "userDataDir": false,
+            "runtimeArgs": [
+                "--disable-web-security",
+                "--disable-features=VizDisplayCompositor"
+            ]
         },
         {
             "type": "node",

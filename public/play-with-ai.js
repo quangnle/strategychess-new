@@ -422,21 +422,21 @@ function initializeBattleGraphics(matchInfo) {
         
         // Add game controls
         addGameControls();
+        
+        
     } catch (error) {
         console.error('Error initializing P5 battle graphics:', error);
     }
 }
 
 function addGameControls() {
-    // Add next turn button
+    // Add turn info panel
+    // Add control buttons
     const controlsContainer = document.createElement('div');
     controlsContainer.className = 'flex justify-center mt-4 space-x-4';
     controlsContainer.innerHTML = `
-        <button id="next-turn-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            Next Turn
-        </button>
-        <button id="show-turn-info-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-            Show Turn Info
+        <button id="end-turn-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+            End Turn
         </button>
     `;
     
@@ -446,28 +446,41 @@ function addGameControls() {
     }
     
     // Add event listeners
-    const nextTurnBtn = document.getElementById('next-turn-btn');
-    if (nextTurnBtn) {
-        nextTurnBtn.addEventListener('click', () => {
+    const endTurnBtn = document.getElementById('end-turn-btn');
+    if (endTurnBtn) {
+        endTurnBtn.addEventListener('click', () => {
             if (battleGraphics) {
-                battleGraphics.nextTurn();
+                const gameLogic = battleGraphics.gameLogic;
+                
+                if (gameLogic.currentTurnUnit === null) {
+                    // Nếu current unit là null, đưa 1 quân bất kỳ của team hiện tại vào alreadyEndedTurnUnits
+                    const currentTeam = gameLogic.matchInfo.team1.teamId === gameLogic.currentTurnTeamId ? 
+                                      gameLogic.matchInfo.team1 : gameLogic.matchInfo.team2;
+                    
+                    // Tìm unit đầu tiên có thể chọn (alive, không phải Base, chưa ended turn)
+                    const availableUnit = currentTeam.units.find(unit => 
+                        unit.hp > 0 && 
+                        unit.name !== "Base" && 
+                        !gameLogic.alreadyEndedTurnUnits.includes(unit)
+                    );
+                    
+                    if (availableUnit) {
+                        gameLogic.alreadyEndedTurnUnits.push(availableUnit);
+                        console.log(`Added ${availableUnit.name} to alreadyEndedTurnUnits`);
+                    }
+                } else {
+                    // Nếu current unit đã có, xử lý end turn bình thường
+                    gameLogic.endTurn();
+                }
+                
+                // Chuyển sang turn tiếp theo
+                gameLogic.newTurn();
             }
         });
     }
     
-    const showTurnInfoBtn = document.getElementById('show-turn-info-btn');
-    if (showTurnInfoBtn) {
-        showTurnInfoBtn.addEventListener('click', () => {
-            if (battleGraphics) {
-                const turnInfo = battleGraphics.getCurrentTurnInfo();
-                const turnSequence = battleGraphics.getTurnSequence();
-                console.log('Current Turn Info:', turnInfo);
-                console.log('Turn Sequence:', turnSequence);
-                alert(`Current Turn: ${turnInfo.inTurnUnit.name} (${turnInfo.inTurnUnit.teamId})\nCan Move: ${turnInfo.canMove}\nCan Attack: ${turnInfo.canAttack}\nCan Heal: ${turnInfo.canHeal}`);
-            }
-        });
-    }
 }
+
 
 // Chat functionality
 function initializeChat() {
