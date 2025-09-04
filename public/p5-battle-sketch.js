@@ -365,7 +365,7 @@ class P5BattleGraphics {
         // Panel background
         const isCurrentTeam = team.teamId === this.gameLogic.currentTurnTeamId;
         if (isCurrentTeam) {
-            this.p.fill(50, 50, 100); // Highlight current team bằng màu xanh lá
+            this.p.fill(50, 150, 50); // Highlight current team bằng màu xanh lá
         } else {
             this.p.fill(40, 40, 40);
         }
