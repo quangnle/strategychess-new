@@ -1,6 +1,7 @@
 # Ignore node_modules directory
 node_modules/
 public/uploads/
+.vscode/chrome-debug-profile/
 
 node_modules
 .env
