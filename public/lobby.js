@@ -373,7 +373,7 @@ function initializeTeamSelection() {
 // Create hero card
 function createHeroCard(hero) {
     const card = document.createElement('div');
-    card.className = 'bg-gray-700 hover:bg-gray-600 rounded-lg p-3 cursor-pointer transition-colors border-2 border-transparent hover:border-blue-500';
+    card.className = 'bg-gray-700 hover:bg-gray-600 rounded-lg p-3 cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-blue-500';
     card.dataset.heroType = hero.type;
     
     // Get stats from UNIT_TYPES
@@ -482,14 +482,21 @@ function selectHero(hero, card) {
     if (previousSelected) {
         previousSelected.classList.remove('hero-selected', 'border-blue-500', 'bg-blue-600');
         previousSelected.classList.add('border-transparent', 'bg-gray-700');
+        // Reset inline styles for mobile compatibility
+        previousSelected.style.borderColor = '';
+        previousSelected.style.backgroundColor = '';
     }
     
-    // Select new hero
-    card.classList.add('hero-selected', 'border-blue-500', 'bg-blue-600');
+    // Select new hero with more specific classes
+    card.classList.add('hero-selected');
     card.classList.remove('border-transparent', 'bg-gray-700');
+    card.classList.add('border-blue-500', 'bg-blue-600');
+    
+    // Force style update for mobile compatibility
+    card.style.borderColor = '#3B82F6';
+    card.style.backgroundColor = '#2563EB';
     
     selectedHero = hero;
-    
     
     updateReadyButton();
 }
