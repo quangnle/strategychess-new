@@ -9,12 +9,42 @@ let isReady = false;
 
 // Available heroes and units data
 const heroes = [
-    { type: 'ara', name: 'Ara', image: 'imgs/heroes/ara_blue.png' },
-    { type: 'nizza', name: 'Nizza', image: 'imgs/heroes/nizza_blue.png' },
-    { type: 'taki', name: 'Taki', image: 'imgs/heroes/taki_blue.png' },
-    { type: 'trarex', name: 'Trarex', image: 'imgs/heroes/trarex_blue.png' },
-    { type: 'trezdin', name: 'Trezdin', image: 'imgs/heroes/trezdin_blue.png' },
-    { type: 'wizzi', name: 'Wizzi', image: 'imgs/heroes/wizzi_blue.png' }
+    { 
+        type: 'ara', 
+        name: 'Ara', 
+        image: 'imgs/heroes/ara_blue.png',
+        biography: 'Ara is a skilled warrior with exceptional combat abilities. Known for her agility and precision, she excels in close combat situations and can quickly adapt to changing battlefield conditions.'
+    },
+    { 
+        type: 'nizza', 
+        name: 'Nizza', 
+        image: 'imgs/heroes/nizza_blue.png',
+        biography: 'Nizza is a master tactician with deep knowledge of battlefield strategy. Her analytical mind allows her to predict enemy movements and coordinate team efforts with unmatched efficiency.'
+    },
+    { 
+        type: 'taki', 
+        name: 'Taki', 
+        image: 'imgs/heroes/taki_blue.png',
+        biography: 'Taki is a mysterious figure with ancient powers. Her connection to the mystical arts gives her unique abilities that can turn the tide of battle in unexpected ways.'
+    },
+    { 
+        type: 'trarex', 
+        name: 'Trarex', 
+        image: 'imgs/heroes/trarex_blue.png',
+        biography: 'Trarex is a seasoned veteran with years of battlefield experience. His leadership skills and defensive capabilities make him an invaluable asset in protecting his team.'
+    },
+    { 
+        type: 'trezdin', 
+        name: 'Trezdin', 
+        image: 'imgs/heroes/trezdin_blue.png',
+        biography: 'Trezdin is a powerful mage with control over elemental forces. His magical abilities can devastate enemy formations and provide crucial support to his allies.'
+    },
+    { 
+        type: 'wizzi', 
+        name: 'Wizzi', 
+        image: 'imgs/heroes/wizzi_blue.png',
+        biography: 'Wizzi is a brilliant inventor and engineer. His technological expertise allows him to create powerful devices and modify the battlefield to his advantage.'
+    }
 ];
 
 const units = [
@@ -320,6 +350,9 @@ function initializeTeamSelection() {
         const unitCard = createUnitCard(unit);
         unitsSelection.appendChild(unitCard);
     });
+    
+    // Initialize 5 empty unit slots
+    initializeUnitSlots();
 }
 
 // Create hero card
@@ -358,6 +391,21 @@ function createUnitCard(unit) {
     return card;
 }
 
+// Initialize unit slots
+function initializeUnitSlots() {
+    const unitsSelected = document.getElementById('units-selected');
+    unitsSelected.innerHTML = '';
+    
+    // Create 5 empty slots
+    for (let i = 0; i < 5; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'bg-gray-600 rounded border-2 border-dashed border-gray-500 h-16 flex items-center justify-center';
+        slot.dataset.slotIndex = i;
+        slot.innerHTML = '<span class="text-gray-400 text-xs">Empty</span>';
+        unitsSelected.appendChild(slot);
+    }
+}
+
 // Select hero
 function selectHero(hero, card) {
     // Remove previous selection
@@ -373,60 +421,110 @@ function selectHero(hero, card) {
     
     selectedHero = hero;
     
-    // Show selected hero
-    const heroSelected = document.getElementById('hero-selected');
-    heroSelected.innerHTML = `
-        <div class="flex items-center space-x-3">
-            <img src="${hero.image}" alt="${hero.name}" class="w-12 h-12 rounded">
-            <div>
-                <div class="font-medium text-white">${hero.name}</div>
-                <div class="text-sm text-blue-200">Hero Selected</div>
-            </div>
+    // Show selected hero in the new display area
+    const selectedHeroDisplay = document.getElementById('selected-hero-display');
+    selectedHeroDisplay.innerHTML = `
+        <div class="text-center">
+            <img src="${hero.image}" alt="${hero.name}" class="w-20 h-20 mx-auto mb-2 rounded">
+            <div class="text-sm font-medium text-white">${hero.name}</div>
         </div>
     `;
-    heroSelected.classList.remove('hidden');
+    
+    // Show hero biography
+    const heroBiography = document.getElementById('hero-biography');
+    heroBiography.innerHTML = `
+        <div class="text-sm text-gray-300">
+            <div class="font-medium text-white mb-2">${hero.name}</div>
+            <div>${hero.biography}</div>
+        </div>
+    `;
     
     updateReadyButton();
 }
 
 // Select unit
 function selectUnit(unit, card) {
-    if (selectedUnits.length >= 5) {
-        // Remove first unit if we have 5
-        const firstUnit = selectedUnits[0];
-        const firstCard = document.querySelector(`[data-unit-type="${firstUnit.type}"]`);
-        if (firstCard) {
-            firstCard.classList.remove('unit-selected', 'border-blue-500', 'bg-blue-600');
-            firstCard.classList.add('border-transparent', 'bg-gray-700');
-        }
-        selectedUnits.shift();
+    // Find first empty slot
+    const emptySlot = document.querySelector('[data-slot-index]:not(.filled)');
+    if (!emptySlot) {
+        // All slots are filled, show message
+        alert('All 5 unit slots are filled. Remove a unit first to add a new one.');
+        return;
     }
     
-    // Add new unit
+    // Add unit to selectedUnits array
     selectedUnits.push(unit);
-    card.classList.add('unit-selected', 'border-blue-500', 'bg-blue-600');
-    card.classList.remove('border-transparent', 'bg-gray-700');
     
-    updateUnitsDisplay();
+    // Fill the slot
+    const slotIndex = parseInt(emptySlot.dataset.slotIndex);
+    fillUnitSlot(slotIndex, unit);
+    
+    // Update unit counter
+    updateUnitCounter();
     updateReadyButton();
 }
 
-// Update units display
-function updateUnitsDisplay() {
-    const unitsSelected = document.getElementById('units-selected');
-    const unitCounter = document.getElementById('unit-counter');
+// Fill unit slot
+function fillUnitSlot(slotIndex, unit) {
+    const slot = document.querySelector(`[data-slot-index="${slotIndex}"]`);
+    if (!slot) return;
     
-    unitsSelected.innerHTML = '';
-    selectedUnits.forEach(unit => {
-        const unitDiv = document.createElement('div');
-        unitDiv.className = 'bg-blue-800 rounded p-2 text-center';
-        unitDiv.innerHTML = `
-            <img src="${unit.image}" alt="${unit.name}" class="w-8 h-8 mx-auto mb-1 rounded">
-            <div class="text-xs text-white">${unit.name}</div>
-        `;
-        unitsSelected.appendChild(unitDiv);
+    slot.classList.add('filled');
+    slot.classList.remove('border-dashed', 'border-gray-500');
+    slot.classList.add('border-solid', 'border-blue-500', 'bg-blue-800');
+    
+    slot.innerHTML = `
+        <div class="relative w-full h-full flex flex-col items-center justify-center">
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs font-bold flex items-center justify-center" 
+                    onclick="removeUnitFromSlot(${slotIndex})" title="Remove unit">
+                ×
+            </button>
+            <img src="${unit.image}" alt="${unit.name}" class="w-8 h-8 mb-1 rounded">
+            <div class="text-xs text-white text-center">${unit.name}</div>
+        </div>
+    `;
+}
+
+// Remove unit from slot
+function removeUnitFromSlot(slotIndex) {
+    const slot = document.querySelector(`[data-slot-index="${slotIndex}"]`);
+    if (!slot) return;
+    
+    // Remove from selectedUnits array
+    selectedUnits.splice(slotIndex, 1);
+    
+    // Reset slot to empty
+    slot.classList.remove('filled', 'border-solid', 'border-blue-500', 'bg-blue-800');
+    slot.classList.add('border-dashed', 'border-gray-500', 'bg-gray-600');
+    slot.innerHTML = '<span class="text-gray-400 text-xs">Empty</span>';
+    
+    // Reorganize remaining units
+    reorganizeUnitSlots();
+    updateUnitCounter();
+    updateReadyButton();
+}
+
+// Reorganize unit slots after removal
+function reorganizeUnitSlots() {
+    // Clear all slots first
+    for (let i = 0; i < 5; i++) {
+        const slot = document.querySelector(`[data-slot-index="${i}"]`);
+        if (slot) {
+            slot.classList.remove('filled', 'border-solid', 'border-blue-500', 'bg-blue-800');
+            slot.classList.add('border-dashed', 'border-gray-500', 'bg-gray-600');
+            slot.innerHTML = '<span class="text-gray-400 text-xs">Empty</span>';
+        }
+    }
+    
+    // Fill slots with remaining units
+    selectedUnits.forEach((unit, index) => {
+        fillUnitSlot(index, unit);
     });
-    
+}
+
+// Update unit counter
+function updateUnitCounter() {
+    const unitCounter = document.getElementById('unit-counter');
     unitCounter.textContent = `(${selectedUnits.length}/5)`;
 }
 
