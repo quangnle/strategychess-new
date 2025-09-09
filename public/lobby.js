@@ -7,7 +7,10 @@ let selectedHero = null;
 let selectedUnits = [];
 let isReady = false;
 
-// Available heroes and units data
+// Import unit definitions
+import { UNIT_TYPES } from '../core-logic/definitions.js';
+
+// Available heroes and units data (using definitions.js)
 const heroes = [
     { 
         type: 'ara', 
@@ -48,9 +51,21 @@ const heroes = [
 ];
 
 const units = [
-    { type: 'assassin', name: 'Assassin', image: 'imgs/assassin_blue.png' },
-    { type: 'ranger', name: 'Ranger', image: 'imgs/ranger_blue.png' },
-    { type: 'tanker', name: 'Tanker', image: 'imgs/tanker_blue.png' }
+    { 
+        type: 'assassin', 
+        name: 'Assassin', 
+        image: 'imgs/assassin_blue.png'
+    },
+    { 
+        type: 'ranger', 
+        name: 'Ranger', 
+        image: 'imgs/ranger_blue.png'
+    },
+    { 
+        type: 'tanker', 
+        name: 'Tanker', 
+        image: 'imgs/tanker_blue.png'
+    }
 ];
 
 // Initialize everything after DOM is loaded
@@ -361,10 +376,37 @@ function createHeroCard(hero) {
     card.className = 'bg-gray-700 hover:bg-gray-600 rounded-lg p-3 cursor-pointer transition-colors border-2 border-transparent hover:border-blue-500';
     card.dataset.heroType = hero.type;
     
+    // Get stats from UNIT_TYPES
+    const unitDef = UNIT_TYPES[hero.name];
+    const stats = {
+        hp: unitDef.hp,
+        speed: unitDef.speed,
+        range: unitDef.range,
+        magicRange: unitDef.magicRange
+    };
+    
     card.innerHTML = `
         <div class="text-center">
             <img src="${hero.image}" alt="${hero.name}" class="w-16 h-16 mx-auto mb-2 rounded">
-            <div class="text-sm font-medium text-white">${hero.name}</div>
+            <div class="text-sm font-medium text-white mb-2">${hero.name}</div>
+            <div class="text-xs text-gray-300 flex justify-center items-center space-x-2">
+                <span class="flex items-center">
+                    <span class="text-red-400 mr-1">❤</span>
+                    <span class="text-red-400">${stats.hp}</span>
+                </span>
+                <span class="flex items-center">
+                    <span class="text-yellow-400 mr-1">🦵</span>
+                    <span class="text-yellow-400">${stats.speed}</span>
+                </span>
+                <span class="flex items-center">
+                    <span class="text-orange-400 mr-1">⚔</span>
+                    <span class="text-orange-400">${stats.range}</span>
+                </span>
+                <span class="flex items-center">
+                    <span class="text-purple-400 mr-1">🔮</span>
+                    <span class="text-purple-400">${stats.magicRange}</span>
+                </span>
+            </div>
         </div>
     `;
     
@@ -379,10 +421,37 @@ function createUnitCard(unit) {
     card.className = 'bg-gray-700 hover:bg-gray-600 rounded-lg p-3 cursor-pointer transition-colors border-2 border-transparent hover:border-blue-500';
     card.dataset.unitType = unit.type;
     
+    // Get stats from UNIT_TYPES
+    const unitDef = UNIT_TYPES[unit.name];
+    const stats = {
+        hp: unitDef.hp,
+        speed: unitDef.speed,
+        range: unitDef.range,
+        magicRange: unitDef.magicRange
+    };
+    
     card.innerHTML = `
         <div class="text-center">
             <img src="${unit.image}" alt="${unit.name}" class="w-12 h-12 mx-auto mb-2 rounded">
-            <div class="text-xs font-medium text-white">${unit.name}</div>
+            <div class="text-xs font-medium text-white mb-2">${unit.name}</div>
+            <div class="text-xs text-gray-300 flex justify-center items-center space-x-1">
+                <span class="flex items-center">
+                    <span class="text-red-400 mr-1">❤</span>
+                    <span class="text-red-400">${stats.hp}</span>
+                </span>
+                <span class="flex items-center">
+                    <span class="text-yellow-400 mr-1">🦵</span>
+                    <span class="text-yellow-400">${stats.speed}</span>
+                </span>
+                <span class="flex items-center">
+                    <span class="text-orange-400 mr-1">⚔</span>
+                    <span class="text-orange-400">${stats.range}</span>
+                </span>
+                <span class="flex items-center">
+                    <span class="text-purple-400 mr-1">🔮</span>
+                    <span class="text-purple-400">${stats.magicRange}</span>
+                </span>
+            </div>
         </div>
     `;
     
@@ -421,42 +490,25 @@ function selectHero(hero, card) {
     
     selectedHero = hero;
     
-    // Show selected hero in the new display area
-    const selectedHeroDisplay = document.getElementById('selected-hero-display');
-    selectedHeroDisplay.innerHTML = `
-        <div class="text-center">
-            <img src="${hero.image}" alt="${hero.name}" class="w-20 h-20 mx-auto mb-2 rounded">
-            <div class="text-sm font-medium text-white">${hero.name}</div>
-        </div>
-    `;
-    
-    // Show hero biography
-    const heroBiography = document.getElementById('hero-biography');
-    heroBiography.innerHTML = `
-        <div class="text-sm text-gray-300">
-            <div class="font-medium text-white mb-2">${hero.name}</div>
-            <div>${hero.biography}</div>
-        </div>
-    `;
     
     updateReadyButton();
 }
 
 // Select unit
 function selectUnit(unit, card) {
-    // Find first empty slot
-    const emptySlot = document.querySelector('[data-slot-index]:not(.filled)');
-    if (!emptySlot) {
-        // All slots are filled, show message
-        alert('All 5 unit slots are filled. Remove a unit first to add a new one.');
+    // Check if we already have 5 units
+    if (selectedUnits.length >= 5) {
+        alert('You can only select 5 units. Remove a unit first to add a new one.');
         return;
     }
     
     // Add unit to selectedUnits array
     selectedUnits.push(unit);
     
+    // Find the next available slot index (should be selectedUnits.length - 1)
+    const slotIndex = selectedUnits.length - 1;
+    
     // Fill the slot
-    const slotIndex = parseInt(emptySlot.dataset.slotIndex);
     fillUnitSlot(slotIndex, unit);
     
     // Update unit counter
@@ -474,31 +526,32 @@ function fillUnitSlot(slotIndex, unit) {
     slot.classList.add('border-solid', 'border-blue-500', 'bg-blue-800');
     
     slot.innerHTML = `
-        <div class="relative w-full h-full flex flex-col items-center justify-center">
-            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs font-bold flex items-center justify-center" 
-                    onclick="removeUnitFromSlot(${slotIndex})" title="Remove unit">
+        <div class="relative w-full h-full flex flex-col items-center justify-center p-1">
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs font-bold flex items-center justify-center remove-unit-btn" 
+                    data-slot-index="${slotIndex}" title="Remove unit">
                 ×
             </button>
             <img src="${unit.image}" alt="${unit.name}" class="w-8 h-8 mb-1 rounded">
-            <div class="text-xs text-white text-center">${unit.name}</div>
+            <div class="text-xs text-white text-center font-medium">${unit.name}</div>
         </div>
     `;
+    
+    // Add event listener to the remove button
+    const removeBtn = slot.querySelector('.remove-unit-btn');
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeUnitFromSlot(slotIndex);
+    });
 }
 
 // Remove unit from slot
 function removeUnitFromSlot(slotIndex) {
-    const slot = document.querySelector(`[data-slot-index="${slotIndex}"]`);
-    if (!slot) return;
+    // Remove from selectedUnits array at the correct position
+    if (slotIndex >= 0 && slotIndex < selectedUnits.length) {
+        selectedUnits.splice(slotIndex, 1);
+    }
     
-    // Remove from selectedUnits array
-    selectedUnits.splice(slotIndex, 1);
-    
-    // Reset slot to empty
-    slot.classList.remove('filled', 'border-solid', 'border-blue-500', 'bg-blue-800');
-    slot.classList.add('border-dashed', 'border-gray-500', 'bg-gray-600');
-    slot.innerHTML = '<span class="text-gray-400 text-xs">Empty</span>';
-    
-    // Reorganize remaining units
+    // Reorganize all slots
     reorganizeUnitSlots();
     updateUnitCounter();
     updateReadyButton();

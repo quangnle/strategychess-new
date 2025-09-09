@@ -45,52 +45,42 @@
             <div class="bg-gray-800 rounded-lg p-6">
                 <h2 class="text-xl font-bold text-yellow-400 mb-6">Select Your Team</h2>
                 
-                <!-- Selected Hero and Biography Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <!-- Selected Hero -->
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Selected Hero</h3>
-                        <div id="selected-hero-display" class="flex items-center justify-center h-32 bg-gray-600 rounded border-2 border-dashed border-gray-500">
-                            <span class="text-gray-400">No hero selected</span>
+                <!-- Two Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-6">
+                    <!-- Left Column: Hero Selection -->
+                    <div>
+                        <!-- Hero List Section -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-blue-300 mb-3">Hero List</h3>
+                            <div id="hero-selection" class="grid grid-cols-3 gap-3">
+                                <!-- Hero cards will be populated by JavaScript -->
+                            </div>
                         </div>
                     </div>
-                    
-                    <!-- Hero Biography -->
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Hero Biography</h3>
-                        <div id="hero-biography" class="h-32 bg-gray-600 rounded p-3 overflow-y-auto">
-                            <span class="text-gray-400">Select a hero to view biography</span>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Hero List Section -->
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold text-blue-300 mb-3">Hero List</h3>
-                    <div id="hero-selection" class="grid grid-cols-3 md:grid-cols-6 gap-3">
-                        <!-- Hero cards will be populated by JavaScript -->
-                    </div>
-                </div>
-
-                <!-- Regular Units Section -->
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold text-blue-300 mb-3">
-                        Regular Units (5 required)
-                        <span id="unit-counter" class="text-sm text-blue-200">(0/5)</span>
-                    </h3>
-                    
-                    <!-- Unit Types Selection -->
-                    <div class="mb-4">
-                        <div id="units-selection" class="grid grid-cols-3 gap-3">
-                            <!-- Unit cards will be populated by JavaScript -->
+                    <!-- Right Column: Unit Selection -->
+                    <div class="space-y-6">
+                        <!-- Regular Units Section -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-blue-300 mb-3">
+                                Regular Units (5 required)
+                                <span id="unit-counter" class="text-sm text-blue-200">(0/5)</span>
+                            </h3>
+                            
+                            <!-- Unit Types Selection -->
+                            <div class="mb-4">
+                                <div id="units-selection" class="grid grid-cols-3 gap-3">
+                                    <!-- Unit cards will be populated by JavaScript -->
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <!-- Selected Units Slots -->
-                    <div class="mb-4">
-                        <h4 class="text-md font-medium text-gray-300 mb-2">Selected Units:</h4>
-                        <div id="units-selected" class="grid grid-cols-5 gap-2">
-                            <!-- 5 empty slots will be populated by JavaScript -->
+
+                        <!-- Selected Units Slots -->
+                        <div>
+                            <h4 class="text-md font-medium text-gray-300 mb-2">Selected Units:</h4>
+                            <div id="units-selected" class="grid grid-cols-5 gap-2">
+                                <!-- 5 empty slots will be populated by JavaScript -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -153,6 +143,6 @@
         </div>
     </div>
 
-    <script src="lobby.js"></script>
+    <script type="module" src="lobby.js"></script>
 </body>
 </html>
