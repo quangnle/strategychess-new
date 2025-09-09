@@ -3,6 +3,7 @@ class MemoryStore {
         this.chatMessages = [];
         this.connectedUsers = new Map();
         this.rooms = new Map();
+        this.matches = new Map(); // Store for matches
         this.maxChatMessages = 100; // Keep last 100 messages
     }
 
@@ -87,12 +88,114 @@ class MemoryStore {
         return room ? Array.from(room.users) : [];
     }
 
+    // Match methods
+    createMatch(matchId, matchData) {
+        this.matches.set(matchId, {
+            ...matchData,
+            id: matchId,
+            createdAt: new Date().toISOString(),
+            status: 'waiting', // waiting, in_lobby, in_game, finished
+            players: new Map(),
+            maxPlayers: 2,
+            gameState: null
+        });
+        return this.matches.get(matchId);
+    }
+
+    getMatch(matchId) {
+        return this.matches.get(matchId);
+    }
+
+    updateMatch(matchId, updates) {
+        const match = this.matches.get(matchId);
+        if (match) {
+            Object.assign(match, updates);
+            this.matches.set(matchId, match);
+        }
+        return match;
+    }
+
+    deleteMatch(matchId) {
+        return this.matches.delete(matchId);
+    }
+
+    getAllMatches() {
+        return Array.from(this.matches.values());
+    }
+
+    getWaitingMatches() {
+        return Array.from(this.matches.values()).filter(match => match.status === 'waiting');
+    }
+
+    addPlayerToMatch(matchId, userId, playerData) {
+        const match = this.matches.get(matchId);
+        if (match && match.players.size < match.maxPlayers) {
+            match.players.set(userId, {
+                ...playerData,
+                joinedAt: new Date().toISOString(),
+                isReady: false,
+                team: null // Will be set in lobby
+            });
+            return true;
+        }
+        return false;
+    }
+
+    removePlayerFromMatch(matchId, userId) {
+        const match = this.matches.get(matchId);
+        if (match) {
+            match.players.delete(userId);
+            // If no players left, delete the match
+            if (match.players.size === 0) {
+                this.deleteMatch(matchId);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    updatePlayerInMatch(matchId, userId, updates) {
+        const match = this.matches.get(matchId);
+        if (match && match.players.has(userId)) {
+            const player = match.players.get(userId);
+            Object.assign(player, updates);
+            match.players.set(userId, player);
+            return player;
+        }
+        return null;
+    }
+
+    getMatchPlayers(matchId) {
+        const match = this.matches.get(matchId);
+        return match ? Array.from(match.players.entries()).map(([userId, playerData]) => ({
+            userId,
+            ...playerData
+        })) : [];
+    }
+
+    isMatchReady(matchId) {
+        const match = this.matches.get(matchId);
+        if (!match || match.players.size !== match.maxPlayers) {
+            return false;
+        }
+        
+        // Check if all players are ready
+        for (const [userId, player] of match.players) {
+            if (!player.isReady) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // Utility methods
     getStats() {
         return {
             connectedUsers: this.connectedUsers.size,
             totalMessages: this.chatMessages.length,
             activeRooms: this.rooms.size,
+            activeMatches: this.matches.size,
+            waitingMatches: this.getWaitingMatches().length,
             timestamp: new Date().toISOString()
         };
     }
@@ -101,6 +204,7 @@ class MemoryStore {
         this.chatMessages = [];
         this.connectedUsers.clear();
         this.rooms.clear();
+        this.matches.clear();
     }
 }
 

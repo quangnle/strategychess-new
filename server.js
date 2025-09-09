@@ -56,6 +56,9 @@ app.use('/ai-processor', express.static(path.join(__dirname, 'ai-processor'), {
     }
 }));
 
+// Parse JSON bodies
+app.use(express.json());
+
 // Debug middleware with enhanced logging
 app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
@@ -74,6 +77,9 @@ app.use((req, res, next) => {
     
     next();
 });
+
+// API routes
+app.use('/api/matches', require('./api/matches'));
 
 // Main route
 app.get('/', (req, res) => {

@@ -2,6 +2,13 @@
 let chatSocket = null;
 let currentUser = null;
 
+// Utility function
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Initialize everything after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize chat functionality
@@ -9,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize action buttons
     initializeActionButtons();
+    
+    // Initialize waiting matches
+    initializeWaitingMatches();
 });
 
  // Action buttons functionality
@@ -20,15 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
      if (createMatchBtn && matchNameInput) {
          createMatchBtn.addEventListener('click', () => {
              const matchName = matchNameInput.value.trim();
-             if (!matchName) {
-                 alert('Please enter a match name');
-                 return;
-             }
              
-             console.log('Creating match:', matchName);
-             // TODO: Implement match creation logic
-             // For now, redirect to team selection page
-             window.location.href = 'play-with-ai.html';
+             // If no match name provided, use current user's name
+             const finalMatchName = matchName || (currentUser?.username || 'Player') + "'s Match";
+             
+             console.log('Creating match:', finalMatchName);
+             createMatch(finalMatchName);
          });
          
          // Allow Enter key to create match
@@ -229,9 +236,179 @@ function initializeChat() {
         });
     }
     
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+}
+
+// Match functionality
+function initializeWaitingMatches() {
+    console.log('Initializing waiting matches...');
+    
+    // Load waiting matches
+    loadWaitingMatches();
+    
+    // Set up refresh button
+    const refreshBtn = document.getElementById('refresh-matches-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', loadWaitingMatches);
+    }
+    
+    // Auto-refresh every 5 seconds
+    setInterval(loadWaitingMatches, 5000);
+}
+
+// Load waiting matches from server
+async function loadWaitingMatches() {
+    try {
+        const response = await fetch('/api/matches/waiting');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayWaitingMatches(data.matches);
+        } else {
+            console.error('Error loading matches:', data.error);
+            displayWaitingMatchesError(data.error);
+        }
+    } catch (error) {
+        console.error('Error loading matches:', error);
+        displayWaitingMatchesError('Failed to load matches');
+    }
+}
+
+// Display waiting matches
+function displayWaitingMatches(matches) {
+    const waitingMatchesContainer = document.getElementById('waiting-matches');
+    
+    if (!matches || matches.length === 0) {
+        waitingMatchesContainer.innerHTML = `
+            <div class="text-center text-gray-500 text-sm">
+                No waiting matches available
+            </div>
+        `;
+        return;
+    }
+    
+    waitingMatchesContainer.innerHTML = '';
+    
+    matches.forEach(match => {
+        const matchDiv = document.createElement('div');
+        matchDiv.className = 'bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-blue-500 transition-colors';
+        
+        matchDiv.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <div class="font-medium text-white">${escapeHtml(match.name)}</div>
+                    <div class="text-sm text-gray-300">
+                        Created by ${escapeHtml(match.creatorUsername)}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        Players: ${match.playerCount}/${match.maxPlayers} • 
+                        Created: ${new Date(match.createdAt).toLocaleTimeString()}
+                    </div>
+                </div>
+                <button class="join-match-btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition-colors"
+                        data-match-id="${match.id}">
+                    Join
+                </button>
+            </div>
+        `;
+        
+        // Add click handler for join button
+        const joinBtn = matchDiv.querySelector('.join-match-btn');
+        joinBtn.addEventListener('click', () => {
+            joinMatch(match.id);
+        });
+        
+        waitingMatchesContainer.appendChild(matchDiv);
+    });
+}
+
+// Display waiting matches error
+function displayWaitingMatchesError(error) {
+    const waitingMatchesContainer = document.getElementById('waiting-matches');
+    waitingMatchesContainer.innerHTML = `
+        <div class="text-center text-red-400 text-sm">
+            Error: ${escapeHtml(error)}
+        </div>
+    `;
+}
+
+// Create a new match
+async function createMatch(matchName) {
+    if (!currentUser) {
+        alert('Please wait for connection to establish');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/matches/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                creatorUserId: currentUser.userId,
+                creatorUsername: currentUser.username,
+                matchName: matchName
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('Match created successfully:', data.match);
+            // Store user info for lobby
+            localStorage.setItem('lobbyUser', JSON.stringify({
+                userId: currentUser.userId,
+                username: currentUser.username,
+                matchId: data.match.id
+            }));
+            // Redirect to lobby
+            window.location.href = `lobby.html?matchId=${data.match.id}`;
+        } else {
+            alert(`Error creating match: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error creating match:', error);
+        alert('Failed to create match. Please try again.');
+    }
+}
+
+// Join an existing match
+async function joinMatch(matchId) {
+    if (!currentUser) {
+        alert('Please wait for connection to establish');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/matches/join', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                matchId: matchId,
+                userId: currentUser.userId,
+                username: currentUser.username
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('Joined match successfully:', data.match);
+            // Store user info for lobby
+            localStorage.setItem('lobbyUser', JSON.stringify({
+                userId: currentUser.userId,
+                username: currentUser.username,
+                matchId: data.match.id
+            }));
+            // Redirect to lobby
+            window.location.href = `lobby.html?matchId=${data.match.id}`;
+        } else {
+            alert(`Error joining match: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error joining match:', error);
+        alert('Failed to join match. Please try again.');
     }
 }
