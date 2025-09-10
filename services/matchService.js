@@ -8,6 +8,10 @@ class MatchService {
     // Create a new match
     createMatch(creatorUserId, creatorUsername, matchName) {
         try {
+            console.log(`=== MATCH SERVICE: createMatch called ===`);
+            console.log(`Creator: ${creatorUsername} (${creatorUserId})`);
+            console.log(`Match name: ${matchName}`);
+            
             // Check if user already has an active match
             const existingMatch = this.getUserActiveMatch(creatorUserId);
             if (existingMatch) {
@@ -16,6 +20,7 @@ class MatchService {
 
             // Generate unique match ID
             const matchId = this.generateMatchId();
+            console.log(`Generated matchId: ${matchId}`);
             
             // Use creator's username as match name if not provided
             const finalMatchName = matchName || `${creatorUsername}'s Match`;
@@ -48,8 +53,13 @@ class MatchService {
     // Join an existing match
     joinMatch(matchId, userId, username) {
         try {
+            console.log(`=== MATCH SERVICE: joinMatch called ===`);
+            console.log(`MatchId: ${matchId}`);
+            console.log(`User: ${username} (${userId})`);
+            
             const match = this.store.getMatch(matchId);
             if (!match) {
+                console.error(`Match ${matchId} not found in joinMatch`);
                 throw new Error('Match not found');
             }
 
@@ -195,8 +205,11 @@ class MatchService {
     // Set player ready status
     setPlayerReady(matchId, userId, isReady) {
         try {
+            console.log(`Setting player ${userId} ready status to ${isReady} in match ${matchId}`);
             const match = this.store.getMatch(matchId);
             if (!match) {
+                console.error(`Match ${matchId} not found in setPlayerReady`);
+                console.error('Available matches:', Array.from(this.store.matches.keys()));
                 throw new Error('Match not found');
             }
 
@@ -216,9 +229,8 @@ class MatchService {
             // Update player ready status
             const updatedPlayer = this.store.updatePlayerInMatch(matchId, userId, { isReady });
 
-            // Check if match is ready to start
+            // Check if match is ready to start (but don't update status here)
             if (isReady && this.store.isMatchReady(matchId)) {
-                this.store.updateMatch(matchId, { status: 'in_game' });
                 console.log(`Match ${matchId} is ready to start!`);
             }
 
@@ -272,6 +284,39 @@ class MatchService {
             inGame: allMatches.filter(m => m.status === 'in_game').length,
             finished: allMatches.filter(m => m.status === 'finished').length
         };
+    }
+
+    // Get teams data for game initialization
+    getTeamsData(matchId) {
+        try {
+            const match = this.store.getMatch(matchId);
+            if (!match) {
+                console.error(`Match ${matchId} not found in getTeamsData`);
+                return null;
+            }
+
+            const players = this.store.getMatchPlayers(matchId);
+            const teamsData = { blue: null, red: null };
+
+            players.forEach(player => {
+                if (player.team) {
+                    // Determine team ID (default to blue for first player, red for second)
+                    const teamId = player.team.teamId || (teamsData.blue ? 'red' : 'blue');
+                    
+                    teamsData[teamId] = {
+                        hero: player.team.hero?.type,
+                        units: player.team.units?.map(unit => unit.type) || []
+                    };
+                }
+            });
+
+            console.log(`Teams data for match ${matchId}:`, teamsData);
+            return teamsData;
+
+        } catch (error) {
+            console.error('Error getting teams data:', error);
+            return null;
+        }
     }
 
     // Clean up old matches (optional - for maintenance)

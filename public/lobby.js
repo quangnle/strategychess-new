@@ -165,10 +165,13 @@ function initializeLobby(matchId) {
     
     lobbySocket.on('lobby:match_ready', (data) => {
         console.log('Match is ready:', data);
+        console.log('Current match:', currentMatch);
         showLoadingScreen();
         
         // Redirect to game after a delay
         setTimeout(() => {
+            const matchId = currentMatch?.id || data.matchId;
+            console.log('Redirecting to play.html with matchId:', matchId);
             window.location.href = `play.html?matchId=${matchId}`;
         }, 3000);
     });

@@ -1,10 +1,16 @@
-import gameHandlers from '../handlers/gameHandlers.js';
+import GameHandlers from '../handlers/gameHandlers.js';
+
+// Create instance of GameHandlers
+const gameHandlers = new GameHandlers();
 
 function registerGameNS(gameNamespace) {
-    console.log('Registering game namespace handlers...');
+    console.log('=== REGISTERING GAME NAMESPACE HANDLERS ===');
+    console.log('Game namespace:', gameNamespace.name);
     
     gameNamespace.on('connection', (socket) => {
-        console.log(`User connected to game namespace: ${socket.id}`);
+        console.log(`=== GAME NAMESPACE: User connected ===`);
+        console.log(`Socket ID: ${socket.id}`);
+        console.log(`Socket remote address: ${socket.handshake.address}`);
         
         // Handle user authentication
         socket.on('game:authenticate', (data) => {

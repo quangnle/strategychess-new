@@ -7,14 +7,17 @@ function initSocket(io) {
     
     // Register chat namespace
     const chatNamespace = io.of('/chat');
+    console.log('Registering chat namespace...');
     registerChatNS(chatNamespace);
     
     // Register lobby namespace
     const lobbyNamespace = io.of('/lobby');
+    console.log('Registering lobby namespace...');
     registerLobbyNS(lobbyNamespace);
     
     // Register game namespace
     const gameNamespace = io.of('/game');
+    console.log('Registering game namespace...');
     registerGameNS(gameNamespace);
     
     // Register default namespace for general events

@@ -1,30 +1,38 @@
 import matchService from '../../services/matchService.js';
-import MatchInfo from '../../core-logic/match-info.js';
-import GameLogic from '../../core-logic/game-logic.js';
+import ServerGameManager from '../../services/gameManager.js';
 
 class GameHandlers {
     constructor() {
         this.service = matchService;
-        this.gameStates = new Map(); // Store game states for each match
+        this.gameManager = new ServerGameManager(); // Use centralized game manager
     }
 
     // Handle user joining game
     handleJoinGame(socket, io, data) {
         try {
             const { matchId } = data;
+            console.log(`=== GAME HANDLER: handleJoinGame called ===`);
+            console.log(`MatchId: ${matchId}`);
+            console.log(`Socket userId: ${socket.userId}`);
+            console.log(`Socket username: ${socket.username}`);
             
             if (!socket.userId) {
+                console.log('User not authenticated');
                 socket.emit('error', { message: 'User not authenticated' });
                 return;
             }
 
             const match = this.service.getMatch(matchId);
             if (!match) {
+                console.error(`Match ${matchId} not found in gameHandlers`);
+                console.error('Available matches:', Array.from(this.service.store.matches.keys()));
                 socket.emit('error', { message: 'Match not found' });
                 return;
             }
 
+            console.log(`Match ${matchId} status: ${match.status}`);
             if (match.status !== 'in_game') {
+                console.error(`Match ${matchId} is not in game phase, status: ${match.status}`);
                 socket.emit('error', { message: 'Match is not in game phase' });
                 return;
             }
@@ -41,22 +49,55 @@ class GameHandlers {
             socket.join(`game_${matchId}`);
             socket.currentGameId = matchId;
 
-            // Initialize game state if not exists
-            if (!this.gameStates.has(matchId)) {
-                this.initializeGameState(matchId, players);
+            // Get or create game instance
+            let gameInstance = this.gameManager.getGame(matchId);
+            if (!gameInstance) {
+                console.log(`Creating new game instance for match ${matchId}`);
+                
+                // Get teams data and create game instance
+                const teamsData = this.service.getTeamsData(matchId);
+                console.log(`Teams data for match ${matchId}:`, JSON.stringify(teamsData, null, 2));
+                
+                if (!teamsData) {
+                    console.error(`Teams data not found for match ${matchId}`);
+                    socket.emit('error', { message: 'Teams data not found' });
+                    return;
+                }
+                
+                try {
+                    gameInstance = this.gameManager.createGame(matchId, match.name, teamsData);
+                    if (!gameInstance) {
+                        console.error(`Failed to create game instance for match ${matchId}`);
+                        socket.emit('error', { message: 'Failed to create game instance' });
+                        return;
+                    }
+                    console.log(`Game instance created successfully for match ${matchId}`);
+                } catch (error) {
+                    console.error(`Error creating game instance for match ${matchId}:`, error);
+                    socket.emit('error', { message: `Failed to create game instance: ${error.message}` });
+                    return;
+                }
+            } else {
+                console.log(`Using existing game instance for match ${matchId}`);
             }
 
-            const gameState = this.gameStates.get(matchId);
+            // Add player to game instance
+            this.gameManager.addPlayerToGame(matchId, socket.userId);
+
+            // Get game state
+            const gameState = this.gameManager.getGameState(matchId);
 
             // Send game state to user
             socket.emit('game:joined', {
                 matchId: matchId,
                 matchName: match.name,
+                matchInfo: gameInstance.matchInfo, // Send matchInfo for rendering
                 gameState: gameState,
                 playerInfo: {
                     userId: player.userId,
                     username: player.username,
-                    team: player.team
+                    team: player.team,
+                    teamId: player.team?.teamId || 'blue' // Add teamId for perspective
                 }
             });
 
@@ -69,6 +110,7 @@ class GameHandlers {
             console.log(`User ${socket.username} joined game for match ${matchId}`);
 
         } catch (error) {
+            console.error('Error joining game:', error);
             socket.emit('error', { message: error.message });
         }
     }
@@ -81,6 +123,9 @@ class GameHandlers {
             }
 
             const matchId = socket.currentGameId;
+            
+            // Remove player from game instance
+            this.gameManager.removePlayerFromGame(matchId, socket.userId);
             
             // Leave socket room
             socket.leave(`game_${matchId}`);
@@ -114,41 +159,40 @@ class GameHandlers {
                 return;
             }
 
-            const gameState = this.gameStates.get(matchId);
-            if (!gameState) {
-                socket.emit('error', { message: 'Game state not found' });
-                return;
-            }
-
-            // Validate it's the player's turn
-            if (gameState.currentPlayer !== socket.userId) {
-                socket.emit('error', { message: 'Not your turn' });
-                return;
-            }
-
-            // Process the action
-            const result = this.processGameAction(matchId, action, actionData, socket.userId);
+            // Process action through game manager
+            const result = this.gameManager.processAction(matchId, socket.userId, action, actionData);
             
             if (result.success) {
-                // Broadcast action to all players
-                io.to(`game_${matchId}`).emit('game:action', {
+                // Broadcast action result to all players in the game
+                io.to(`game_${matchId}`).emit('game:action_result', {
+                    matchId: matchId,
                     action: action,
                     actionData: actionData,
                     playerId: socket.userId,
-                    result: result,
-                    gameState: this.gameStates.get(matchId)
+                    result: result.result,
+                    gameState: result.gameState,
+                    gameEnded: result.gameEnded
                 });
+                
+                // If game ended, notify all players
+                if (result.gameEnded) {
+                    const gameInstance = this.gameManager.getGame(matchId);
+                    io.to(`game_${matchId}`).emit('game:ended', {
+                        matchId: matchId,
+                        winner: gameInstance.winner,
+                        gameState: result.gameState
+                    });
+                }
 
-                // Check for game end conditions
-                this.checkGameEndConditions(matchId, io);
             } else {
-                socket.emit('error', { message: result.error || 'Invalid action' });
+                socket.emit('game:action_error', { error: result.error });
             }
 
             console.log(`Game action ${action} from ${socket.username} in match ${matchId}`);
 
         } catch (error) {
-            socket.emit('error', { message: error.message });
+            console.error('Error handling game action:', error);
+            socket.emit('game:action_error', { message: error.message });
         }
     }
 
@@ -162,7 +206,7 @@ class GameHandlers {
                 return;
             }
 
-            const gameState = this.gameStates.get(matchId);
+            const gameState = this.gameManager.getGameState(matchId);
             if (!gameState) {
                 socket.emit('error', { message: 'Game state not found' });
                 return;
@@ -178,258 +222,46 @@ class GameHandlers {
         }
     }
 
-    // Initialize game state for a match
-    initializeGameState(matchId, players) {
-        const gameState = {
-            matchId: matchId,
-            status: 'active', // active, paused, finished
-            currentPlayer: players[0].userId, // Start with first player
-            turnNumber: 1,
-            gameBoard: this.createInitialBoard(),
-            players: players.map(p => ({
-                userId: p.userId,
-                username: p.username,
-                team: p.team,
-                isAlive: true,
-                units: this.initializePlayerUnits(p.team)
-            })),
-            gameHistory: [],
-            createdAt: new Date().toISOString()
-        };
-
-        this.gameStates.set(matchId, gameState);
-        console.log(`Game state initialized for match ${matchId}`);
-    }
-
-    // Create initial game board
-    createInitialBoard() {
-        // This would be your game board logic
-        // For now, return a simple structure
-        return {
-            width: 8,
-            height: 8,
-            cells: Array(8).fill().map(() => Array(8).fill(null))
-        };
-    }
-
-    // Initialize player units based on team selection
-    initializePlayerUnits(teamData) {
-        if (!teamData) return [];
-
-        const units = [];
-        
-        // Add hero
-        if (teamData.hero) {
-            units.push({
-                id: `hero_${Date.now()}`,
-                type: teamData.hero.type,
-                isHero: true,
-                position: null,
-                health: 100,
-                maxHealth: 100
-            });
-        }
-
-        // Add regular units
-        if (teamData.units) {
-            teamData.units.forEach((unit, index) => {
-                units.push({
-                    id: `unit_${Date.now()}_${index}`,
-                    type: unit.type,
-                    isHero: false,
-                    position: null,
-                    health: 50,
-                    maxHealth: 50
-                });
-            });
-        }
-
-        return units;
-    }
-
-    // Process game action
-    processGameAction(matchId, action, actionData, playerId) {
-        const gameState = this.gameStates.get(matchId);
-        if (!gameState) {
-            return { success: false, error: 'Game state not found' };
-        }
-
-        try {
-            switch (action) {
-                case 'move_unit':
-                    return this.handleMoveUnit(gameState, actionData, playerId);
-                case 'attack':
-                    return this.handleAttack(gameState, actionData, playerId);
-                case 'end_turn':
-                    return this.handleEndTurn(gameState, playerId);
-                default:
-                    return { success: false, error: 'Unknown action' };
-            }
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
-    }
-
-    // Handle unit movement
-    handleMoveUnit(gameState, actionData, playerId) {
-        const { unitId, fromPosition, toPosition } = actionData;
-        
-        // Validate move
-        if (!this.isValidMove(gameState, unitId, fromPosition, toPosition, playerId)) {
-            return { success: false, error: 'Invalid move' };
-        }
-
-        // Execute move
-        const player = gameState.players.find(p => p.userId === playerId);
-        const unit = player.units.find(u => u.id === unitId);
-        
-        if (unit) {
-            unit.position = toPosition;
-            gameState.gameHistory.push({
-                action: 'move_unit',
-                playerId: playerId,
-                unitId: unitId,
-                fromPosition: fromPosition,
-                toPosition: toPosition,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        return { success: true, gameState: gameState };
-    }
-
-    // Handle attack action
-    handleAttack(gameState, actionData, playerId) {
-        const { attackerId, targetId, targetPosition } = actionData;
-        
-        // Validate attack
-        if (!this.isValidAttack(gameState, attackerId, targetId, targetPosition, playerId)) {
-            return { success: false, error: 'Invalid attack' };
-        }
-
-        // Execute attack
-        const attacker = this.findUnitById(gameState, attackerId);
-        const target = this.findUnitById(gameState, targetId);
-        
-        if (attacker && target) {
-            const damage = this.calculateDamage(attacker, target);
-            target.health = Math.max(0, target.health - damage);
-            
-            gameState.gameHistory.push({
-                action: 'attack',
-                playerId: playerId,
-                attackerId: attackerId,
-                targetId: targetId,
-                damage: damage,
-                timestamp: new Date().toISOString()
-            });
-
-            // Check if target is defeated
-            if (target.health <= 0) {
-                target.isAlive = false;
-            }
-        }
-
-        return { success: true, gameState: gameState };
-    }
-
-    // Handle end turn
-    handleEndTurn(gameState, playerId) {
-        if (gameState.currentPlayer !== playerId) {
-            return { success: false, error: 'Not your turn' };
-        }
-
-        // Switch to next player
-        const currentPlayerIndex = gameState.players.findIndex(p => p.userId === playerId);
-        const nextPlayerIndex = (currentPlayerIndex + 1) % gameState.players.length;
-        gameState.currentPlayer = gameState.players[nextPlayerIndex].userId;
-        gameState.turnNumber++;
-
-        gameState.gameHistory.push({
-            action: 'end_turn',
-            playerId: playerId,
-            newCurrentPlayer: gameState.currentPlayer,
-            turnNumber: gameState.turnNumber,
-            timestamp: new Date().toISOString()
+    // Register all game event handlers
+    registerHandlers(socket, io) {
+        socket.on('game:join', (data) => {
+            this.handleJoinGame(socket, io, data);
         });
 
-        return { success: true, gameState: gameState };
+        socket.on('game:leave', (data) => {
+            this.handleLeaveGame(socket, io, data);
+        });
+
+        socket.on('game:action', (data) => {
+            this.handleGameAction(socket, io, data);
+        });
+
+        socket.on('game:get_state', (data) => {
+            this.handleGetGameState(socket, io, data);
+        });
     }
 
-    // Validate move
-    isValidMove(gameState, unitId, fromPosition, toPosition, playerId) {
-        // Implement your move validation logic here
-        return true; // Placeholder
-    }
-
-    // Validate attack
-    isValidAttack(gameState, attackerId, targetId, targetPosition, playerId) {
-        // Implement your attack validation logic here
-        return true; // Placeholder
-    }
-
-    // Find unit by ID
-    findUnitById(gameState, unitId) {
-        for (const player of gameState.players) {
-            const unit = player.units.find(u => u.id === unitId);
-            if (unit) return unit;
-        }
-        return null;
-    }
-
-    // Calculate damage
-    calculateDamage(attacker, target) {
-        // Implement your damage calculation logic here
-        return 25; // Placeholder
-    }
-
-    // Check game end conditions
-    checkGameEndConditions(matchId, io) {
-        const gameState = this.gameStates.get(matchId);
-        if (!gameState) return;
-
-        // Check if any player has no alive units
-        const alivePlayers = gameState.players.filter(player => 
-            player.units.some(unit => unit.isAlive)
-        );
-
-        if (alivePlayers.length <= 1) {
-            // Game ended
-            gameState.status = 'finished';
-            gameState.winner = alivePlayers.length === 1 ? alivePlayers[0] : null;
-            
-            // Update match status
-            this.service.store.updateMatch(matchId, { status: 'finished' });
-
-            // Notify all players
-            io.to(`game_${matchId}`).emit('game:ended', {
-                matchId: matchId,
-                winner: gameState.winner,
-                gameState: gameState
-            });
-
-            console.log(`Game ended for match ${matchId}, winner: ${gameState.winner?.username || 'Draw'}`);
-        }
-    }
-
-    // Handle disconnect - clean up game
+    // Handle socket disconnection
     handleDisconnect(socket, io) {
-        if (socket.currentGameId) {
-            this.handleLeaveGame(socket, io, {});
-        }
-    }
+        try {
+            if (socket.currentGameId) {
+                const matchId = socket.currentGameId;
+                
+                // Remove player from game instance
+                this.gameManager.removePlayerFromGame(matchId, socket.userId);
+                
+                // Notify other players
+                socket.to(`game_${matchId}`).emit('game:player_left', {
+                    userId: socket.userId,
+                    username: socket.username
+                });
 
-    // Register all game handlers
-    registerHandlers(socket, io) {
-        // Game events
-        socket.on('game:join', (data) => this.handleJoinGame(socket, io, data));
-        socket.on('game:leave', (data) => this.handleLeaveGame(socket, io, data));
-        socket.on('game:action', (data) => this.handleGameAction(socket, io, data));
-        socket.on('game:get_state', (data) => this.handleGetGameState(socket, io, data));
-        
-        // Handle disconnect
-        socket.on('disconnect', () => this.handleDisconnect(socket, io));
+                console.log(`User ${socket.username} disconnected from game ${matchId}`);
+            }
+        } catch (error) {
+            console.error('Error handling game disconnect:', error);
+        }
     }
 }
 
-export default new GameHandlers();
+export default GameHandlers;

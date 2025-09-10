@@ -90,7 +90,7 @@ class MemoryStore {
 
     // Match methods
     createMatch(matchId, matchData) {
-        this.matches.set(matchId, {
+        const match = {
             ...matchData,
             id: matchId,
             createdAt: new Date().toISOString(),
@@ -98,25 +98,41 @@ class MemoryStore {
             players: new Map(),
             maxPlayers: 2,
             gameState: null
-        });
+        };
+        this.matches.set(matchId, match);
+        console.log(`Created match ${matchId}:`, match);
+        console.log(`Total matches in store: ${this.matches.size}`);
         return this.matches.get(matchId);
     }
 
     getMatch(matchId) {
-        return this.matches.get(matchId);
+        const match = this.matches.get(matchId);
+        if (!match) {
+            console.log(`Match ${matchId} not found in getMatch`);
+            console.log(`Available matches:`, Array.from(this.matches.keys()));
+        }
+        return match;
     }
 
     updateMatch(matchId, updates) {
         const match = this.matches.get(matchId);
         if (match) {
+            console.log(`Updating match ${matchId}:`, updates);
             Object.assign(match, updates);
             this.matches.set(matchId, match);
+            console.log(`Match ${matchId} updated successfully, new status: ${match.status}`);
+        } else {
+            console.error(`Cannot update match ${matchId}: match not found`);
         }
         return match;
     }
 
     deleteMatch(matchId) {
-        return this.matches.delete(matchId);
+        const deleted = this.matches.delete(matchId);
+        if (deleted) {
+            console.log(`Match ${matchId} deleted from store`);
+        }
+        return deleted;
     }
 
     getAllMatches() {
@@ -136,6 +152,8 @@ class MemoryStore {
                 isReady: false,
                 team: null // Will be set in lobby
             });
+            console.log(`Added player ${userId} to match ${matchId}`);
+            console.log(`Match ${matchId} now has ${match.players.size} players`);
             return true;
         }
         return false;
@@ -144,9 +162,11 @@ class MemoryStore {
     removePlayerFromMatch(matchId, userId) {
         const match = this.matches.get(matchId);
         if (match) {
+            console.log(`Removing player ${userId} from match ${matchId}`);
             match.players.delete(userId);
             // If no players left, delete the match
             if (match.players.size === 0) {
+                console.log(`No players left in match ${matchId}, deleting match`);
                 this.deleteMatch(matchId);
             }
             return true;
@@ -175,16 +195,29 @@ class MemoryStore {
 
     isMatchReady(matchId) {
         const match = this.matches.get(matchId);
-        if (!match || match.players.size !== match.maxPlayers) {
+        if (!match) {
+            console.log(`Match ${matchId} not found in isMatchReady`);
+            return false;
+        }
+        
+        console.log(`Checking if match ${matchId} is ready:`);
+        console.log(`- Players count: ${match.players.size}, Max players: ${match.maxPlayers}`);
+        console.log(`- Players:`, Array.from(match.players.entries()).map(([id, p]) => ({ id, isReady: p.isReady, hasTeam: !!p.team })));
+        
+        if (match.players.size !== match.maxPlayers) {
+            console.log(`Match ${matchId} not ready: player count mismatch`);
             return false;
         }
         
         // Check if all players are ready
         for (const [userId, player] of match.players) {
             if (!player.isReady) {
+                console.log(`Match ${matchId} not ready: player ${userId} not ready`);
                 return false;
             }
         }
+        
+        console.log(`Match ${matchId} is ready!`);
         return true;
     }
 

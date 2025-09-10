@@ -29,38 +29,52 @@ class MatchInfo {
         const heroRow = isBlueTeam ? 9 : 2;        
         let startCol = 3;
 
-        // team là một array của tên của các binh chủng có thể lấy thông tin từ UNIT_TYPES        
+        // Tạo hero trước
+        if (teamData.hero) {
+            const heroType = this._getUnitTypeFromName(teamData.hero);
+            let hero = null;
+            switch (heroType) {
+                case UNIT_TYPES.Trezdin:
+                    hero = Unit.createTrezdin(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    break;
+                case UNIT_TYPES.Trarex:
+                    hero = Unit.createTrarex(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    break;
+                case UNIT_TYPES.Taki:
+                    hero = Unit.createTaki(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    break;
+                case UNIT_TYPES.Ara:
+                    hero = Unit.createAra(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    break;
+                case UNIT_TYPES.Wizzi:
+                    hero = Unit.createWizzi(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    break;
+                case UNIT_TYPES.Nizza:
+                    hero = Unit.createNizza(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    break;
+                default:
+                    throw new Error(`Hero type ${teamData.hero} not found`);
+            }
+            if (hero) {
+                team.addUnit(hero);
+            }
+        }
+        
+        // Tạo regular units
         for (let i = 0; i < teamData.units.length; i++) {
             let unit = null;
             const unitName = teamData.units[i];
             const unitType = this._getUnitTypeFromName(unitName);
+            const unitCol = startCol + i; // Cột 3, 4, 5, 6, 7
             switch (unitType) {
                 case UNIT_TYPES.Tanker:
-                    unit = Unit.createTanker(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, startCol + i - 1);
+                    unit = Unit.createTanker(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
                     break;
                 case UNIT_TYPES.Ranger:
-                    unit = Unit.createRanger(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, startCol + i - 1);
+                    unit = Unit.createRanger(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
                     break;
                 case UNIT_TYPES.Assassin:
-                    unit = Unit.createAssassin(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, startCol + i - 1);
-                    break;
-                case UNIT_TYPES.Trezdin:
-                    unit = Unit.createTrezdin(`${teamData.teamName}_${unitType.name}`, teamData.teamId, heroRow, 5);
-                    break;
-                case UNIT_TYPES.Trarex:
-                    unit = Unit.createTrarex(`${teamData.teamName}_${unitType.name}`, teamData.teamId, heroRow, 5);
-                    break;
-                case UNIT_TYPES.Taki:
-                    unit = Unit.createTaki(`${teamData.teamName}_${unitType.name}`, teamData.teamId, heroRow, 5);
-                    break;
-                case UNIT_TYPES.Ara:
-                    unit = Unit.createAra(`${teamData.teamName}_${unitType.name}`, teamData.teamId, heroRow, 5);
-                    break;
-                case UNIT_TYPES.Wizzi:
-                    unit = Unit.createWizzi(`${teamData.teamName}_${unitType.name}`, teamData.teamId, heroRow, 5);
-                    break;
-                case UNIT_TYPES.Nizza:
-                    unit = Unit.createNizza(`${teamData.teamName}_${unitType.name}`, teamData.teamId, heroRow, 5);
+                    unit = Unit.createAssassin(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
                     break;
                 default:
                     throw new Error(`Unit type ${unitType.name} not found`);

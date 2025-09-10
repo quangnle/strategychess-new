@@ -4,9 +4,8 @@ let chatSocket = null;
 let currentUser = null;
 let currentMatch = null;
 let gameState = null;
-let selectedUnit = null;
-let currentAction = null; // 'move', 'attack', null
-let gameCanvas = null;
+let teamsData = null; // Teams data from server
+let battleGraphics = null; // P5.js graphics instance
 
 // Initialize everything after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -29,13 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI event handlers
     initializeEventHandlers();
     
-    // Initialize game canvas
-    initializeGameCanvas();
+    // Initialize collapsible panels
+    initializeCollapsiblePanels();
 });
 
 // Initialize game
 function initializeGame(matchId) {
     console.log('Initializing game for match:', matchId);
+    console.log('URL params:', window.location.search);
     
     // Get user info from localStorage (set when creating/joining match)
     const lobbyUserData = localStorage.getItem('lobbyUser');
@@ -61,8 +61,11 @@ function initializeGame(matchId) {
     
     gameSocket.on('game:authenticated', (data) => {
         console.log('Authenticated with game:', data);
-        // Now join the game
-        gameSocket.emit('game:join', { matchId: matchId });
+        // Now join the game with a small delay to ensure match is ready
+        console.log('Attempting to join game with matchId:', matchId);
+        setTimeout(() => {
+            gameSocket.emit('game:join', { matchId: matchId });
+        }, 1000); // 1 second delay
     });
     
     gameSocket.on('game:joined', (data) => {
@@ -72,9 +75,32 @@ function initializeGame(matchId) {
         currentUser = data.playerInfo;
         
         updateMatchInfo();
-        updatePlayersInfo();
-        updateTurnInfo();
-        renderGameBoard();
+        initializeBattleGraphics(data.matchInfo); // Pass matchInfo from server
+        
+        // Update battle graphics with game state
+        if (battleGraphics && data.gameState) {
+            battleGraphics.updateGameState(data.gameState);
+        }
+    });
+    
+    let joinRetryCount = 0;
+    const maxRetries = 3;
+    
+    gameSocket.on('error', (error) => {
+        console.error('Game socket error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        
+        // If it's a "not in game phase" error, retry joining
+        if (error.message && error.message.includes('not in game phase') && joinRetryCount < maxRetries) {
+            joinRetryCount++;
+            console.log(`Retrying to join game (attempt ${joinRetryCount}/${maxRetries})...`);
+            setTimeout(() => {
+                gameSocket.emit('game:join', { matchId: matchId });
+            }, 2000); // 2 second delay between retries
+            return;
+        }
+        
+        alert(`Game error: ${error.message || 'Unknown error'}`);
     });
     
     gameSocket.on('game:player_joined', (data) => {
@@ -87,16 +113,22 @@ function initializeGame(matchId) {
         addGameLog(`${data.username} left the game`);
     });
     
-    gameSocket.on('game:action', (data) => {
-        console.log('Game action received:', data);
-        handleGameAction(data);
+    gameSocket.on('game:action_result', (data) => {
+        console.log('Game action result received:', data);
+        handleGameActionResult(data);
+    });
+    
+    gameSocket.on('game:action_error', (data) => {
+        console.error('Game action error:', data);
+        alert(`Action failed: ${data.error || data.message}`);
     });
     
     gameSocket.on('game:state', (data) => {
         console.log('Game state received:', data);
         gameState = data.gameState;
-        updateTurnInfo();
-        renderGameBoard();
+        if (battleGraphics) {
+            battleGraphics.updateGameState(data.gameState);
+        }
     });
     
     gameSocket.on('game:ended', (data) => {
@@ -244,261 +276,216 @@ function initializeChat() {
     }
 }
 
-// Initialize game canvas
-function initializeGameCanvas() {
-    // This would integrate with your existing p5.js game logic
-    // For now, create a placeholder canvas
-    const canvasContainer = document.getElementById('game-canvas-container');
+// Initialize battle graphics with P5.js
+async function initializeBattleGraphics(serverMatchInfo) {
+    try {
+        // Import P5BattleGraphicsMultiplayer
+        const graphicsModule = await import('./p5-battle-sketch-multiplayer.js');
+        const P5BattleGraphicsMultiplayer = graphicsModule.default;
+        
+        console.log('Initializing battle graphics with server matchInfo:', serverMatchInfo);
+        console.log('Current user:', currentUser);
+        
+        // Use matchInfo from server instead of creating our own
+        const matchInfo = serverMatchInfo || {
+            matchId: currentMatch.matchId || currentMatch.id,
+            matchName: currentMatch.matchName || currentMatch.name,
+            team1: {
+                teamId: 'blue',
+                teamName: 'Blue Team',
+                units: []
+            },
+            team2: {
+                teamId: 'red',
+                teamName: 'Red Team',
+                units: []
+            }
+        };
+        
+        console.log('Using matchInfo:', matchInfo);
+        
+        // Initialize graphics with player perspective
+        battleGraphics = new P5BattleGraphicsMultiplayer(
+            matchInfo, 
+            gameSocket, 
+            currentUser.userId,
+            currentUser.teamId // Pass player's team for perspective
+        );
+        
+        console.log('Battle graphics initialized successfully');
+        
+    } catch (error) {
+        console.error('Error initializing battle graphics:', error);
+        // Fallback to placeholder
+        showPlaceholderCanvas();
+    }
+}
+
+// Handle game action results from server
+function handleGameActionResult(data) {
+    console.log('Handling game action result:', data);
     
-    // Create a simple placeholder for the game board
-    const placeholder = document.createElement('div');
-    placeholder.className = 'w-96 h-96 bg-gray-700 rounded-lg flex items-center justify-center';
-    placeholder.innerHTML = `
-        <div class="text-center text-gray-400">
-            <div class="text-2xl mb-2">🎮</div>
-            <div>Game Board</div>
-            <div class="text-sm mt-2">Click on units to select them</div>
+    // Update game state
+    if (data.gameState) {
+        gameState = data.gameState;
+        if (battleGraphics) {
+            battleGraphics.updateGameState(data.gameState);
+        }
+    }
+    
+    // Add to game log
+    const actionText = getActionText(data.action, data.actionData, data.playerId);
+    addGameLog(actionText);
+    
+    // If game ended, show game over modal
+    if (data.gameEnded) {
+        showGameOverModal(data);
+    }
+}
+
+// Get human-readable action text
+function getActionText(action, actionData, playerId) {
+    const playerName = playerId === currentUser.userId ? 'You' : 'Opponent';
+    
+    switch (action) {
+        case 'move_unit':
+            return `${playerName} moved unit to (${actionData.row}, ${actionData.col})`;
+        case 'attack':
+            return `${playerName} attacked target`;
+        case 'heal':
+            return `${playerName} healed target`;
+        case 'sacrifice':
+            return `${playerName} sacrificed unit`;
+        case 'suicide':
+            return `${playerName} used suicide attack`;
+        case 'end_turn':
+            return `${playerName} ended turn`;
+        default:
+            return `${playerName} performed ${action}`;
+    }
+}
+
+// Fallback placeholder canvas
+function showPlaceholderCanvas() {
+    const canvasContainer = document.getElementById('game-canvas-container');
+    canvasContainer.innerHTML = `
+        <div class="w-96 h-96 bg-gray-700 rounded-lg flex items-center justify-center">
+            <div class="text-center text-gray-400">
+                <div class="text-2xl mb-2">🎮</div>
+                <div>Game Board</div>
+                <div class="text-sm mt-2">Loading game graphics...</div>
+            </div>
         </div>
     `;
+}
+
+// Initialize collapsible panels
+function initializeCollapsiblePanels() {
+    // Game log toggle
+    const toggleGameLogBtn = document.getElementById('toggle-game-log');
+    const gameLogContainer = document.getElementById('game-log-container');
+    const gameLogChevron = document.getElementById('game-log-chevron');
     
-    canvasContainer.appendChild(placeholder);
+    if (toggleGameLogBtn && gameLogContainer) {
+        toggleGameLogBtn.addEventListener('click', () => {
+            gameLogContainer.classList.toggle('hidden');
+            gameLogChevron.classList.toggle('rotate-180');
+        });
+    }
     
-    // Add click handler for unit selection (placeholder)
-    placeholder.addEventListener('click', (e) => {
-        if (gameState && gameState.currentPlayer === currentUser?.userId) {
-            // Simulate unit selection
-            selectUnit({
-                id: 'unit_1',
-                type: 'assassin',
-                position: { x: 1, y: 1 },
-                health: 50,
-                maxHealth: 50
-            });
+    // Chat panel dragging functionality
+    initializeChatDragging();
+}
+
+// Initialize chat panel dragging
+function initializeChatDragging() {
+    const chatPanel = document.getElementById('chat-panel');
+    if (!chatPanel) return;
+    
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX;
+    let initialY;
+    let xOffset = 0;
+    let yOffset = 0;
+    
+    chatPanel.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+    
+    function dragStart(e) {
+        if (e.target.closest('button')) return; // Don't drag if clicking buttons
+        
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+        
+        if (e.target === chatPanel || chatPanel.contains(e.target)) {
+            isDragging = true;
         }
-    });
+    }
+    
+    function drag(e) {
+        if (isDragging) {
+            e.preventDefault();
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+            
+            xOffset = currentX;
+            yOffset = currentY;
+            
+            chatPanel.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+        }
+    }
+    
+    function dragEnd() {
+        initialX = currentX;
+        initialY = currentY;
+        isDragging = false;
+    }
 }
 
 // Initialize event handlers
 function initializeEventHandlers() {
-    // End turn button
-    const endTurnBtn = document.getElementById('end-turn-btn');
-    endTurnBtn.addEventListener('click', () => {
-        if (gameState && gameState.currentPlayer === currentUser?.userId) {
-            gameSocket.emit('game:action', {
-                matchId: currentMatch.matchId,
-                action: 'end_turn',
-                actionData: {}
-            });
-        }
-    });
-    
     // Leave game button
     const leaveGameBtn = document.getElementById('leave-game-btn');
-    leaveGameBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to leave the game?')) {
-            window.location.href = 'index.html';
-        }
-    });
-    
-    // Game action buttons
-    const moveBtn = document.getElementById('move-btn');
-    const attackBtn = document.getElementById('attack-btn');
-    const cancelActionBtn = document.getElementById('cancel-action-btn');
-    
-    moveBtn.addEventListener('click', () => {
-        if (selectedUnit && gameState.currentPlayer === currentUser?.userId) {
-            currentAction = 'move';
-            updateActionButtons();
-        }
-    });
-    
-    attackBtn.addEventListener('click', () => {
-        if (selectedUnit && gameState.currentPlayer === currentUser?.userId) {
-            currentAction = 'attack';
-            updateActionButtons();
-        }
-    });
-    
-    cancelActionBtn.addEventListener('click', () => {
-        currentAction = null;
-        updateActionButtons();
-    });
+    if (leaveGameBtn) {
+        leaveGameBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to leave the game?')) {
+                window.location.href = 'index.html';
+            }
+        });
+    }
     
     // Game over modal buttons
     const playAgainBtn = document.getElementById('play-again-btn');
     const backToMainBtn = document.getElementById('back-to-main-btn');
     
-    playAgainBtn.addEventListener('click', () => {
-        window.location.href = 'index.html';
-    });
-    
-    backToMainBtn.addEventListener('click', () => {
-        window.location.href = 'index.html';
-    });
-}
-
-// Handle game action from server
-function handleGameAction(data) {
-    const { action, actionData, playerId, result, gameState: newGameState } = data;
-    
-    // Update game state
-    gameState = newGameState;
-    
-    // Add to game log
-    addGameLog(`${getPlayerName(playerId)} performed ${action}`);
-    
-    // Update UI
-    updateTurnInfo();
-    updatePlayersInfo();
-    renderGameBoard();
-    
-    // Clear selection if it's not the current player's turn
-    if (gameState.currentPlayer !== currentUser?.userId) {
-        selectedUnit = null;
-        currentAction = null;
-        updateSelectedUnitInfo();
-        updateActionButtons();
-    }
-}
-
-// Select unit
-function selectUnit(unit) {
-    if (gameState.currentPlayer !== currentUser?.userId) {
-        return; // Not your turn
+    if (playAgainBtn) {
+        playAgainBtn.addEventListener('click', () => {
+            window.location.href = 'index.html';
+        });
     }
     
-    selectedUnit = unit;
-    currentAction = null;
-    updateSelectedUnitInfo();
-    updateActionButtons();
-    
-    addGameLog(`Selected ${unit.type} at position (${unit.position.x}, ${unit.position.y})`);
+    if (backToMainBtn) {
+        backToMainBtn.addEventListener('click', () => {
+            window.location.href = 'index.html';
+        });
+    }
 }
 
 // Update match info
 function updateMatchInfo() {
     const matchInfo = document.getElementById('match-info');
-    if (currentMatch) {
+    if (currentMatch && currentUser) {
+        const opponent = gameState.players.find(p => p.userId !== currentUser.userId);
         matchInfo.innerHTML = `
             <div>Match: ${currentMatch.matchName}</div>
-            <div>Turn: ${gameState?.turnNumber || 1}</div>
+            <div>vs ${opponent?.username || 'Opponent'}</div>
         `;
     }
 }
 
-// Update players info
-function updatePlayersInfo() {
-    const playersInfo = document.getElementById('players-info');
-    if (!gameState) return;
-    
-    playersInfo.innerHTML = '';
-    
-    gameState.players.forEach(player => {
-        const playerDiv = document.createElement('div');
-        playerDiv.className = 'bg-gray-700 rounded-lg p-3';
-        
-        const isCurrentPlayer = player.userId === gameState.currentPlayer;
-        const isCurrentUser = player.userId === currentUser?.userId;
-        
-        if (isCurrentPlayer) {
-            playerDiv.classList.add('border-2', 'border-yellow-400');
-        } else if (isCurrentUser) {
-            playerDiv.classList.add('border-2', 'border-blue-400');
-        }
-        
-        const aliveUnits = player.units.filter(unit => unit.isAlive).length;
-        const totalUnits = player.units.length;
-        
-        playerDiv.innerHTML = `
-            <div class="font-medium text-white">${player.username}</div>
-            <div class="text-sm text-gray-300">
-                Units: ${aliveUnits}/${totalUnits}
-            </div>
-            <div class="text-sm text-gray-300">
-                ${isCurrentPlayer ? 'Current Turn' : ''}
-                ${isCurrentUser ? ' (You)' : ''}
-            </div>
-        `;
-        
-        playersInfo.appendChild(playerDiv);
-    });
-}
-
-// Update turn info
-function updateTurnInfo() {
-    const turnInfo = document.getElementById('turn-info');
-    const endTurnBtn = document.getElementById('end-turn-btn');
-    
-    if (!gameState) return;
-    
-    const isMyTurn = gameState.currentPlayer === currentUser?.userId;
-    const currentPlayer = gameState.players.find(p => p.userId === gameState.currentPlayer);
-    
-    turnInfo.innerHTML = `
-        <div>Turn ${gameState.turnNumber}</div>
-        <div>${isMyTurn ? 'Your Turn' : `${currentPlayer?.username}'s Turn`}</div>
-    `;
-    
-    endTurnBtn.disabled = !isMyTurn;
-}
-
-// Update selected unit info
-function updateSelectedUnitInfo() {
-    const selectedUnitInfo = document.getElementById('selected-unit-info');
-    
-    if (!selectedUnit) {
-        selectedUnitInfo.innerHTML = 'No unit selected';
-        return;
-    }
-    
-    selectedUnitInfo.innerHTML = `
-        <div class="bg-gray-700 rounded-lg p-3">
-            <div class="font-medium text-white">${selectedUnit.type}</div>
-            <div class="text-sm text-gray-300">
-                Health: ${selectedUnit.health}/${selectedUnit.maxHealth}
-            </div>
-            <div class="text-sm text-gray-300">
-                Position: (${selectedUnit.position.x}, ${selectedUnit.position.y})
-            </div>
-        </div>
-    `;
-}
-
-// Update action buttons
-function updateActionButtons() {
-    const moveBtn = document.getElementById('move-btn');
-    const attackBtn = document.getElementById('attack-btn');
-    const cancelActionBtn = document.getElementById('cancel-action-btn');
-    
-    const canAct = selectedUnit && gameState.currentPlayer === currentUser?.userId;
-    
-    moveBtn.disabled = !canAct;
-    attackBtn.disabled = !canAct;
-    cancelActionBtn.disabled = !currentAction;
-    
-    if (currentAction === 'move') {
-        moveBtn.classList.add('bg-green-500');
-        moveBtn.classList.remove('bg-green-600');
-    } else {
-        moveBtn.classList.remove('bg-green-500');
-        moveBtn.classList.add('bg-green-600');
-    }
-    
-    if (currentAction === 'attack') {
-        attackBtn.classList.add('bg-red-500');
-        attackBtn.classList.remove('bg-red-600');
-    } else {
-        attackBtn.classList.remove('bg-red-500');
-        attackBtn.classList.add('bg-red-600');
-    }
-}
-
-// Render game board
-function renderGameBoard() {
-    // This would integrate with your existing p5.js game logic
-    // For now, just update the placeholder
-    console.log('Rendering game board with state:', gameState);
-}
 
 // Add game log entry
 function addGameLog(message) {
@@ -520,7 +507,7 @@ function addGameLog(message) {
 
 // Get player name by ID
 function getPlayerName(playerId) {
-    if (!gameState) return 'Unknown';
+    if (!gameState || !gameState.players) return 'Unknown';
     const player = gameState.players.find(p => p.userId === playerId);
     return player ? player.username : 'Unknown';
 }

@@ -9,6 +9,10 @@ class LobbyHandlers {
     handleJoinLobby(socket, io, data) {
         try {
             const { matchId } = data;
+            console.log(`=== LOBBY HANDLER: handleJoinLobby called ===`);
+            console.log(`MatchId: ${matchId}`);
+            console.log(`Socket userId: ${socket.userId}`);
+            console.log(`Socket username: ${socket.username}`);
             
             if (!socket.userId) {
                 socket.emit('error', { message: 'User not authenticated' });
@@ -201,16 +205,18 @@ class LobbyHandlers {
 
             // Check if match is ready to start
             if (isReady && this.service.store.isMatchReady(matchId)) {
-                // Notify all players that match is ready
-                io.to(`match_${matchId}`).emit('lobby:match_ready', {
-                    matchId: matchId,
-                    message: 'All players are ready! Starting game...'
-                });
-
-                // Start the game after a short delay
+                console.log(`Match ${matchId} is ready to start!`);
+                
+                // Start the game first
+                this.startGame(io, matchId);
+                
+                // Then notify all players that match is ready
                 setTimeout(() => {
-                    this.startGame(io, matchId);
-                }, 2000);
+                    io.to(`match_${matchId}`).emit('lobby:match_ready', {
+                        matchId: matchId,
+                        message: 'All players are ready! Starting game...'
+                    });
+                }, 1000); // 1 second delay after starting game
             }
 
             console.log(`User ${socket.username} ready status: ${isReady} in match ${matchId}`);
@@ -229,8 +235,20 @@ class LobbyHandlers {
                 return;
             }
 
+            console.log(`Starting game for match ${matchId}, current status: ${match.status}`);
+            
             // Update match status
             this.service.store.updateMatch(matchId, { status: 'in_game' });
+            
+            console.log(`Match ${matchId} status updated to in_game`);
+            
+            // Verify match still exists after update
+            const updatedMatch = this.service.getMatch(matchId);
+            if (!updatedMatch) {
+                console.error(`Match ${matchId} disappeared after status update!`);
+                return;
+            }
+            console.log(`Match ${matchId} verified after update, status: ${updatedMatch.status}`);
 
             // Get all players and their teams
             const players = this.service.store.getMatchPlayers(matchId);
@@ -308,6 +326,19 @@ class LobbyHandlers {
     // Handle disconnect - clean up lobby
     handleDisconnect(socket, io) {
         if (socket.currentMatchId) {
+            const matchId = socket.currentMatchId;
+            
+            // Check if match is in game phase - if so, don't remove players
+            const match = this.service.store.getMatch(matchId);
+            if (match && match.status === 'in_game') {
+                console.log(`Player ${socket.username} disconnected from lobby but match is in game phase - keeping match alive`);
+                // Just leave the socket room, don't remove from match
+                socket.leave(`match_${matchId}`);
+                socket.currentMatchId = null;
+                return;
+            }
+            
+            // Normal lobby disconnect handling
             this.handleLeaveLobby(socket, io, {});
         }
     }

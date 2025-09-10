@@ -1,10 +1,13 @@
 import lobbyHandlers from '../handlers/lobbyHandlers.js';
 
 function registerLobbyNS(lobbyNamespace) {
-    console.log('Registering lobby namespace handlers...');
+    console.log('=== REGISTERING LOBBY NAMESPACE HANDLERS ===');
+    console.log('Lobby namespace:', lobbyNamespace.name);
     
     lobbyNamespace.on('connection', (socket) => {
-        console.log(`User connected to lobby namespace: ${socket.id}`);
+        console.log(`=== LOBBY NAMESPACE: User connected ===`);
+        console.log(`Socket ID: ${socket.id}`);
+        console.log(`Socket remote address: ${socket.handshake.address}`);
         
         // Handle user authentication
         socket.on('lobby:authenticate', (data) => {
