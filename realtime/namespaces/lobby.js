@@ -1,4 +1,4 @@
-const lobbyHandlers = require('../handlers/lobbyHandlers');
+import lobbyHandlers from '../handlers/lobbyHandlers.js';
 
 function registerLobbyNS(lobbyNamespace) {
     console.log('Registering lobby namespace handlers...');
@@ -40,4 +40,4 @@ function registerLobbyNS(lobbyNamespace) {
     return lobbyNamespace;
 }
 
-module.exports = { registerLobbyNS };
+export { registerLobbyNS };

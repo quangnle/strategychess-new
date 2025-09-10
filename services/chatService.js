@@ -1,4 +1,4 @@
-const memoryStore = require('../store/memoryStore');
+import memoryStore from '../store/memoryStore.js';
 
 class ChatService {
     constructor() {
@@ -101,4 +101,4 @@ class ChatService {
     }
 }
 
-module.exports = new ChatService();
+export default new ChatService();

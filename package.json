@@ -2,6 +2,7 @@
   "name": "strategy-chess-offline",
   "version": "1.0.0",
   "description": "Strategy Chess Offline Mode",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -1,4 +1,4 @@
-const chatHandlers = require('../handlers/chatHandlers');
+import chatHandlers from '../handlers/chatHandlers.js';
 
 function registerChatNS(chatNamespace) {
     console.log('Registering chat namespace handlers...');
@@ -21,4 +21,4 @@ function registerChatNS(chatNamespace) {
     return chatNamespace;
 }
 
-module.exports = { registerChatNS };
+export { registerChatNS };

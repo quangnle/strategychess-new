@@ -1,4 +1,4 @@
-const matchService = require('../../services/matchService');
+import matchService from '../../services/matchService.js';
 
 class LobbyHandlers {
     constructor() {
@@ -326,4 +326,4 @@ class LobbyHandlers {
     }
 }
 
-module.exports = new LobbyHandlers();
+export default new LobbyHandlers();

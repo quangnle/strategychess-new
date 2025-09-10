@@ -208,4 +208,4 @@ class MemoryStore {
     }
 }
 
-module.exports = new MemoryStore();
+export default new MemoryStore();

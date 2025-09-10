@@ -1,4 +1,6 @@
-const matchService = require('../../services/matchService');
+import matchService from '../../services/matchService.js';
+import MatchInfo from '../../core-logic/match-info.js';
+import GameLogic from '../../core-logic/game-logic.js';
 
 class GameHandlers {
     constructor() {
@@ -430,4 +432,4 @@ class GameHandlers {
     }
 }
 
-module.exports = new GameHandlers();
+export default new GameHandlers();

@@ -1,4 +1,4 @@
-const memoryStore = require('../store/memoryStore');
+import memoryStore from '../store/memoryStore.js';
 
 class MatchService {
     constructor() {
@@ -293,4 +293,4 @@ class MatchService {
     }
 }
 
-module.exports = new MatchService();
+export default new MatchService();

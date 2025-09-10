@@ -1,4 +1,4 @@
-const gameHandlers = require('../handlers/gameHandlers');
+import gameHandlers from '../handlers/gameHandlers.js';
 
 function registerGameNS(gameNamespace) {
     console.log('Registering game namespace handlers...');
@@ -40,4 +40,4 @@ function registerGameNS(gameNamespace) {
     return gameNamespace;
 }
 
-module.exports = { registerGameNS };
+export { registerGameNS };

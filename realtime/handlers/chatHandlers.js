@@ -1,4 +1,4 @@
-const chatService = require('../../services/chatService');
+import chatService from '../../services/chatService.js';
 
 class ChatHandlers {
     constructor() {
@@ -169,4 +169,4 @@ class ChatHandlers {
     }
 }
 
-module.exports = new ChatHandlers();
+export default new ChatHandlers();

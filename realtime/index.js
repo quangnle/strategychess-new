@@ -1,6 +1,6 @@
-const { registerChatNS } = require('./namespaces/chat');
-const { registerLobbyNS } = require('./namespaces/lobby');
-const { registerGameNS } = require('./namespaces/game');
+import { registerChatNS } from './namespaces/chat.js';
+import { registerLobbyNS } from './namespaces/lobby.js';
+import { registerGameNS } from './namespaces/game.js';
 
 function initSocket(io) {
     console.log('Initializing Socket.IO...');
@@ -35,4 +35,4 @@ function initSocket(io) {
     console.log('Socket.IO initialized successfully');
 }
 
-module.exports = initSocket;
+export default initSocket;

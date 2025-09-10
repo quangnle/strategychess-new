@@ -1,8 +1,13 @@
-const express = require('express');
-const path = require('path');
-const cors = require('cors');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
+import express from 'express';
+import path from 'path';
+import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = createServer(app);
@@ -79,7 +84,8 @@ app.use((req, res, next) => {
 });
 
 // API routes
-app.use('/api/matches', require('./api/matches'));
+import matchesRouter from './api/matches.js';
+app.use('/api/matches', matchesRouter);
 
 // Main route
 app.get('/', (req, res) => {
@@ -94,16 +100,16 @@ app.get('/api/debug', (req, res) => {
         timestamp: new Date().toISOString(),
         debugMode: isDebug,
         files: {
-            'index.html': require('fs').existsSync(path.join(__dirname, 'public', 'index.html')),
-            'index.js': require('fs').existsSync(path.join(__dirname, 'public', 'index.js')),
-            'p5-battle-sketch.js': require('fs').existsSync(path.join(__dirname, 'public', 'p5-battle-sketch.js')),
-            'definitions.js': require('fs').existsSync(path.join(__dirname, 'core-logic/definitions.js')),
-            'style.css': require('fs').existsSync(path.join(__dirname, 'style.css'))
+            'index.html': fs.existsSync(path.join(__dirname, 'public', 'index.html')),
+            'index.js': fs.existsSync(path.join(__dirname, 'public', 'index.js')),
+            'p5-battle-sketch.js': fs.existsSync(path.join(__dirname, 'public', 'p5-battle-sketch.js')),
+            'definitions.js': fs.existsSync(path.join(__dirname, 'core-logic/definitions.js')),
+            'style.css': fs.existsSync(path.join(__dirname, 'style.css'))
         },
         directories: {
-            'public': require('fs').existsSync(path.join(__dirname, 'public')),
-            'imgs': require('fs').existsSync(path.join(__dirname, 'public', 'imgs')),
-            'core-logic': require('fs').existsSync(path.join(__dirname, 'core-logic'))
+            'public': fs.existsSync(path.join(__dirname, 'public')),
+            'imgs': fs.existsSync(path.join(__dirname, 'public', 'imgs')),
+            'core-logic': fs.existsSync(path.join(__dirname, 'core-logic'))
         },
         environment: {
             nodeVersion: process.version,
@@ -148,7 +154,7 @@ app.use((req, res) => {
 });
 
 // Initialize Socket.IO
-const initSocket = require('./realtime/index.js');
+import initSocket from './realtime/index.js';
 initSocket(io);
 
 // Start server

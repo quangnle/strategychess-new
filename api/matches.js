@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import matchService from '../services/matchService.js';
+
 const router = express.Router();
-const matchService = require('../services/matchService');
 
 // Get waiting matches
 router.get('/waiting', (req, res) => {
@@ -120,4 +121,4 @@ router.get('/:matchId', (req, res) => {
     }
 });
 
-module.exports = router;
+export default router;
