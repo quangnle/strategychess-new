@@ -87,6 +87,9 @@ class GameHandlers {
             // Get game state
             const gameState = this.gameManager.getGameState(matchId);
 
+            // Determine player's team for perspective
+            const playerTeamId = this.determinePlayerTeam(player, match);
+            
             // Send game state to user
             socket.emit('game:joined', {
                 matchId: matchId,
@@ -97,7 +100,7 @@ class GameHandlers {
                     userId: player.userId,
                     username: player.username,
                     team: player.team,
-                    teamId: player.team?.teamId || 'blue' // Add teamId for perspective
+                    teamId: playerTeamId // Team ID for perspective (blue/red)
                 }
             });
 
@@ -261,6 +264,27 @@ class GameHandlers {
         } catch (error) {
             console.error('Error handling game disconnect:', error);
         }
+    }
+    
+    // Determine player's team for perspective rendering
+    determinePlayerTeam(player, match) {
+        // Get all players in the match
+        const players = this.service.store.getMatchPlayers(match.id);
+        
+        // If there are exactly 2 players, assign teams based on order
+        if (players.length === 2) {
+            const sortedPlayers = players.sort((a, b) => a.joinedAt - b.joinedAt);
+            
+            // First player gets blue team, second gets red team
+            if (player.userId === sortedPlayers[0].userId) {
+                return 'blue';
+            } else {
+                return 'red';
+            }
+        }
+        
+        // Default fallback
+        return 'blue';
     }
 }
 

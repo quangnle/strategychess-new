@@ -62,17 +62,31 @@ class GameInstance {
         }
     }
     
-    // Xử lý game action
+    // Xử lý game action for multiplayer
     processAction(playerId, action, actionData) {
         try {
+            console.log(`🎮 Processing action ${action} from player ${playerId} in game ${this.matchId}`);
+            
             // Validate player is in this game
             if (!this.players.includes(playerId)) {
+                console.log(`❌ Player ${playerId} not in game ${this.matchId}`);
                 return { success: false, error: 'Player not in this game' };
             }
             
             // Validate game is active
             if (this.status !== 'active') {
+                console.log(`❌ Game ${this.matchId} is not active, status: ${this.status}`);
                 return { success: false, error: 'Game is not active' };
+            }
+            
+            // Validate it's player's turn (for most actions)
+            if (action !== 'end_turn' && this.gameLogic.currentTurnTeamId) {
+                // Map player to team - this needs to be implemented based on your team assignment logic
+                const playerTeam = this.getPlayerTeam(playerId);
+                if (playerTeam !== this.gameLogic.currentTurnTeamId) {
+                    console.log(`❌ Not player ${playerId}'s turn. Current turn: ${this.gameLogic.currentTurnTeamId}, Player team: ${playerTeam}`);
+                    return { success: false, error: 'Not your turn' };
+                }
             }
             
             // Process action through game logic
@@ -94,16 +108,25 @@ class GameInstance {
                     result = this.gameLogic.makeSuicide(actionData.unit);
                     break;
                 case 'end_turn':
-                    result = this.gameLogic.endTurn();
+                    // For end turn, advance to next turn
+                    if (this.gameLogic.currentTurnUnit) {
+                        this.gameLogic.endTurn();
+                    }
+                    this.gameLogic.newTurn();
+                    result = true;
                     break;
                 default:
+                    console.log(`❌ Unknown action: ${action}`);
                     return { success: false, error: 'Unknown action' };
             }
             
             if (result) {
+                console.log(`✅ Action ${action} processed successfully`);
+                
                 // Check if game ended
                 const gameEndResult = this.gameLogic.isGameEnd();
                 if (gameEndResult !== 0) {
+                    console.log(`🏁 Game ${this.matchId} ended with result: ${gameEndResult}`);
                     this.endGame(gameEndResult);
                 }
                 
@@ -114,27 +137,39 @@ class GameInstance {
                     gameEnded: gameEndResult !== 0
                 };
             } else {
+                console.log(`❌ Action ${action} failed in game logic`);
                 return { success: false, error: 'Action failed' };
             }
             
         } catch (error) {
-            console.error(`Error processing action in game ${this.matchId}:`, error);
+            console.error(`💥 Error processing action in game ${this.matchId}:`, error);
             return { success: false, error: error.message };
         }
     }
     
-    // Lấy game state
+    // Get player's team assignment
+    getPlayerTeam(playerId) {
+        // For now, simple assignment: first player = blue, second = red
+        // This should match the logic in gameHandlers.js
+        const playerIndex = this.players.indexOf(playerId);
+        return playerIndex === 0 ? 'blue' : 'red';
+    }
+    
+    // Lấy game state for client synchronization
     getGameState() {
         return {
             matchId: this.matchId,
             status: this.status,
             currentPlayer: this.gameLogic.currentTurnTeamId,
             turnNumber: this.gameLogic.roundNo,
-            gameBoard: this.gameLogic.matchInfo,
-            players: this.players,
+            gameBoard: this.gameLogic, // Send entire gameLogic for client rendering
+            players: this.players.map(playerId => ({ userId: playerId })),
             winner: this.winner,
             createdAt: this.createdAt,
-            endedAt: this.endedAt
+            endedAt: this.endedAt,
+            // Additional game info for UI
+            currentTurnInfo: this.gameLogic.getCurrentTurnInfo(),
+            alreadyEndedTurnUnits: this.gameLogic.alreadyEndedTurnUnits || []
         };
     }
     

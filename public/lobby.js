@@ -164,16 +164,16 @@ function initializeLobby(matchId) {
     });
     
     lobbySocket.on('lobby:match_ready', (data) => {
-        console.log('Match is ready:', data);
+        console.log('Match is ready - starting multiplayer game:', data);
         console.log('Current match:', currentMatch);
         showLoadingScreen();
         
-        // Redirect to game after a delay
+        // Redirect to multiplayer game immediately
         setTimeout(() => {
             const matchId = currentMatch?.id || data.matchId;
-            console.log('Redirecting to play.html with matchId:', matchId);
+            console.log('Redirecting to multiplayer game with matchId:', matchId);
             window.location.href = `play.html?matchId=${matchId}`;
-        }, 3000);
+        }, 2000); // Reduced delay for better UX
     });
     
     lobbySocket.on('lobby:match_info', (data) => {

@@ -14,7 +14,6 @@
             "userDataDir": "${workspaceFolder}/.vscode/chrome-debug-profile",
 
             "runtimeArgs": [
-                "--disable-web-security",
                 "--disable-features=VizDisplayCompositor"
 
             ]
