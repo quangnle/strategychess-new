@@ -114,7 +114,8 @@ function initializeGame(matchId) {
     
     // Action results
     gameSocket.on('game:action_result', (data) => {
-        console.log('⚡ Action result:', data);
+        console.log('⚡ Action result received:', data);
+        console.log('🔄 Updating game state from action result');
         
         // Update game state
         if (data.gameState) {
@@ -128,6 +129,29 @@ function initializeGame(matchId) {
         // Update battle graphics if available
         if (battleGraphics) {
             battleGraphics.updateGameState(data.gameState);
+            
+            // 🎯 CRITICAL: Sau move, check và update highlights cho available actions
+            if (data.action === 'move_unit' && data.result === true) {
+                console.log('🎯 Move successful, checking for available actions...');
+                // Đảm bảo unit vẫn selected và update highlights
+                if (battleGraphics.selectedUnit && 
+                    battleGraphics.gameLogic && 
+                    battleGraphics.gameLogic.currentTurnTeamId === battleGraphics.playerTeam) {
+                    
+                    console.log('🔄 Updating highlights after successful move');
+                    battleGraphics.updateHighlights();
+                    
+                    // Update UI info
+                    if (window.updateActionInfo) {
+                        const hasActions = battleGraphics.hasAvailableActionsForSelectedUnit();
+                        if (hasActions) {
+                            window.updateActionInfo('Choose target or action, or click End Turn');
+                        } else {
+                            window.updateActionInfo('No more actions available');
+                        }
+                    }
+                }
+            }
         }
     });
     
@@ -344,13 +368,17 @@ function sendGameAction(action, actionData) {
         return;
     }
     
-    console.log('📤 Sending action:', action, actionData);
-    
-    gameSocket.emit('game:action', {
+    const payload = {
         matchId: currentMatch.matchId,
         action: action,
         actionData: actionData
-    });
+    };
+    
+    console.log('📤 Sending action:', action);
+    console.log('📦 Action payload:', payload);
+    
+    gameSocket.emit('game:action', payload);
+    console.log('✅ Action emitted, waiting for server response...');
 }
 
 // Leave game
@@ -663,6 +691,31 @@ function escapeHtml(text) {
 // Make functions available globally for P5 graphics
 window.sendGameAction = sendGameAction;
 window.addGameLog = addGameLog;
+window.updateActionInfo = updateActionInfo;
 window.currentUser = currentUser;
+
+// Update action info display
+function updateActionInfo(message) {
+    const actionInfoElement = document.getElementById('action-info');
+    if (actionInfoElement) {
+        actionInfoElement.textContent = message;
+    }
+}
+
+// Update selected unit info display  
+function updateSelectedUnitInfo(unit) {
+    const selectedUnitInfoElement = document.getElementById('selected-unit-info');
+    if (selectedUnitInfoElement && unit) {
+        selectedUnitInfoElement.innerHTML = `
+            <div class="text-blue-400 font-bold">${unit.name}</div>
+            <div class="text-xs">HP: ${unit.hp} | Speed: ${unit.speed}</div>
+        `;
+    } else if (selectedUnitInfoElement) {
+        selectedUnitInfoElement.innerHTML = '';
+    }
+}
+
+// Make updateSelectedUnitInfo available globally
+window.updateSelectedUnitInfo = updateSelectedUnitInfo;
 
 console.log('🎮 Multiplayer game client loaded successfully');

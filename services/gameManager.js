@@ -93,25 +93,99 @@ class GameInstance {
             let result;
             switch (action) {
                 case 'move_unit':
-                    result = this.gameLogic.makeMove(actionData.unit, actionData.row, actionData.col);
+                    // Find the actual unit in gameLogic.matchInfo by ID
+                    const unitToMove = this.findUnitById(actionData.unit.id);
+                    if (!unitToMove) {
+                        console.log(`❌ Unit with id ${actionData.unit.id} not found`);
+                        return { success: false, error: 'Unit not found' };
+                    }
+                    console.log(`🚶 Moving unit ${unitToMove.name} from (${unitToMove.row},${unitToMove.col}) to (${actionData.row},${actionData.col})`);
+                    result = this.gameLogic.makeMove(unitToMove, actionData.row, actionData.col);
+                    console.log(`📍 Unit position after move: (${unitToMove.row},${unitToMove.col})`);
+                    
+                    // Check if unit has any remaining actions after move
+                    if (result && !this.hasAvailableActions(unitToMove)) {
+                        console.log(`🔄 No more actions available for ${unitToMove.name}, advancing turn`);
+                        this.gameLogic.newTurn();
+                    }
                     break;
                 case 'attack':
-                    result = this.gameLogic.makeAttack(actionData.unit, actionData.target);
+                    const attackingUnit = this.findUnitById(actionData.unit.id);
+                    const targetUnit = this.findUnitById(actionData.target.id);
+                    if (!attackingUnit || !targetUnit) {
+                        return { success: false, error: 'Unit not found' };
+                    }
+                    console.log(`⚔️ ${attackingUnit.name} attacking ${targetUnit.name}`);
+                    result = this.gameLogic.makeAttack(attackingUnit, targetUnit);
+                    if (result) {
+                        console.log(`🔄 Attack completed, advancing turn`);
+                        this.gameLogic.newTurn();
+                    }
                     break;
                 case 'heal':
-                    result = this.gameLogic.makeHeal(actionData.unit, actionData.target);
+                    const healingUnit = this.findUnitById(actionData.unit.id);
+                    const healTarget = this.findUnitById(actionData.target.id);
+                    if (!healingUnit || !healTarget) {
+                        return { success: false, error: 'Unit not found' };
+                    }
+                    console.log(`💚 ${healingUnit.name} healing ${healTarget.name}`);
+                    result = this.gameLogic.makeHeal(healingUnit, healTarget);
+                    if (result) {
+                        console.log(`🔄 Heal completed, advancing turn`);
+                        this.gameLogic.newTurn();
+                    }
                     break;
                 case 'sacrifice':
-                    result = this.gameLogic.makeSacrifice(actionData.unit, actionData.target);
+                    const sacrificingUnit = this.findUnitById(actionData.unit.id);
+                    const sacrificeTarget = this.findUnitById(actionData.target.id);
+                    if (!sacrificingUnit || !sacrificeTarget) {
+                        return { success: false, error: 'Unit not found' };
+                    }
+                    console.log(`🩸 ${sacrificingUnit.name} sacrificing for ${sacrificeTarget.name}`);
+                    result = this.gameLogic.makeSacrifice(sacrificingUnit, sacrificeTarget);
+                    if (result) {
+                        console.log(`🔄 Sacrifice completed, advancing turn`);
+                        this.gameLogic.newTurn();
+                    }
                     break;
                 case 'suicide':
-                    result = this.gameLogic.makeSuicide(actionData.unit);
+                    const suicideUnit = this.findUnitById(actionData.unit.id);
+                    if (!suicideUnit) {
+                        return { success: false, error: 'Unit not found' };
+                    }
+                    console.log(`🔥 ${suicideUnit.name} committing suicide`);
+                    result = this.gameLogic.makeSuicide(suicideUnit);
+                    if (result) {
+                        console.log(`🔄 Suicide completed, advancing turn`);
+                        this.gameLogic.newTurn();
+                    }
                     break;
                 case 'end_turn':
-                    // For end turn, advance to next turn
-                    if (this.gameLogic.currentTurnUnit) {
+                    // End turn logic (similar to play-with-ai.js)
+                    console.log(`🏁 Player manually ending turn`);
+                    
+                    if (this.gameLogic.currentTurnUnit === null) {
+                        // Nếu current unit là null, đưa 1 quân bất kỳ của team hiện tại vào alreadyEndedTurnUnits
+                        const currentTeam = this.gameLogic.matchInfo.team1.teamId === this.gameLogic.currentTurnTeamId ? 
+                                          this.gameLogic.matchInfo.team1 : this.gameLogic.matchInfo.team2;
+                        
+                        // Tìm unit đầu tiên có thể chọn (alive, không phải Base, chưa ended turn)
+                        const availableUnit = currentTeam.units.find(unit => 
+                            unit.hp > 0 && 
+                            unit.name !== "Base" && 
+                            !this.gameLogic.alreadyEndedTurnUnits.includes(unit)
+                        );
+                        
+                        if (availableUnit) {
+                            this.gameLogic.alreadyEndedTurnUnits.push(availableUnit);
+                            console.log(`Added ${availableUnit.name} to alreadyEndedTurnUnits`);
+                        }
+                    } else {
+                        // Nếu current unit đã có, xử lý end turn bình thường
                         this.gameLogic.endTurn();
                     }
+                    
+                    // Chuyển sang turn tiếp theo
                     this.gameLogic.newTurn();
                     result = true;
                     break;
@@ -153,6 +227,29 @@ class GameInstance {
         // This should match the logic in gameHandlers.js
         const playerIndex = this.players.indexOf(playerId);
         return playerIndex === 0 ? 'blue' : 'red';
+    }
+    
+    // Find unit by ID in gameLogic.matchInfo
+    findUnitById(unitId) {
+        const allUnits = [
+            ...this.gameLogic.matchInfo.team1.units,
+            ...this.gameLogic.matchInfo.team2.units
+        ];
+        return allUnits.find(unit => unit.id === unitId);
+    }
+    
+    // Check if unit has any available actions (attack, heal, sacrifice)
+    hasAvailableActions(unit) {
+        if (!unit || !this.gameLogic) return false;
+        
+        const canAttack = this.gameLogic.getAttackableTargets ? 
+            this.gameLogic.getAttackableTargets(unit).length > 0 : false;
+        const canHeal = this.gameLogic.getHealableTargets ? 
+            this.gameLogic.getHealableTargets(unit).length > 0 : false;
+        const canSacrifice = this.gameLogic.getSacrificeableTargets ? 
+            this.gameLogic.getSacrificeableTargets(unit).length > 0 : false;
+            
+        return canAttack || canHeal || canSacrifice;
     }
     
     // Lấy game state for client synchronization

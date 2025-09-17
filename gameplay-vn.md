@@ -33,3 +33,9 @@ Thứ tự lượt đi (turn) quyết định như sau:
 - Tính toán movement points cho mỗi đội với movement points được tính là tổng giá trị speed của tất cả các unit chưa đi trong round đó. 
 - Team nào có movement point cao hơn thì team ấy được quyền đi
 - Trường hợp nếu 2 team có movement point bằng nhau, team nào đang được quyền ưu tiên thì team ấy được đi
+
+Logic mỗi lượt đi của một unit:
++ Nếu không có ô trống nào để di chuyển và cũng không có kẻ thù nào trong tầm đánh và cũng không còn unit nào khác có thể được di chuyển thì kết thúc lượt
++ Nếu thực hiện đánh thì lượt đi kết thúc ngay sau đó, nghĩa là không được di chuyển nữa
++ Nếu di chuyển đến vị trí mới mà không có target nào để đánh thì hết lượt
++ Nếu sau khi di chuyển và vị trí mới có kẻ thù nằm trong tầm đánh thì có thể tấn công hoặc không và kết thúc lượt

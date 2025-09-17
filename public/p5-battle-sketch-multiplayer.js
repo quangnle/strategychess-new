@@ -1,9 +1,9 @@
 // P5 Battle Graphics cho Multiplayer - chỉ render, không xử lý game logic
 import { BOARD_COLS, BOARD_ROWS, UNIT_TYPES } from '/core-logic/definitions.js';
+import GameLogic from '/core-logic/game-logic.js';
 
 class P5BattleGraphicsMultiplayer {
     constructor(matchInfo, gameSocket, currentUserId, playerTeam) {
-        console.log('🎨 Initializing P5 Battle Graphics for Multiplayer');
         
         this.matchInfo = matchInfo;
         this.gameSocket = gameSocket;
@@ -13,7 +13,6 @@ class P5BattleGraphicsMultiplayer {
         
         // Perspective settings - always show player team at bottom
         this.isPlayerBlue = (playerTeam === 'blue');
-        console.log(`🎯 Player team: ${playerTeam}, isPlayerBlue: ${this.isPlayerBlue}`);
         
         // UI state
         this.selectedUnit = null;
@@ -44,7 +43,6 @@ class P5BattleGraphicsMultiplayer {
         // Setup P5
         this.setupP5();
         
-        console.log('✨ P5 Battle Graphics initialized');
     }
 
     loadImages() {
@@ -95,15 +93,71 @@ class P5BattleGraphicsMultiplayer {
 
     // Update game state from server
     updateGameState(gameState) {
-        console.log('🔄 Updating game state from server:', gameState);
-        
         if (gameState && gameState.gameBoard) {
-            this.gameLogic = gameState.gameBoard;
+            // Server sends gameLogic as plain object - need to recreate GameLogic instance
+            const gameLogicData = gameState.gameBoard;
             
-            // Clear selection if it's not our turn
-            if (this.gameLogic.currentTurnTeamId !== this.playerTeam) {
-                this.selectedUnit = null;
-                this.highlightedCells = [];
+            if (gameLogicData.matchInfo) {
+                // Create new GameLogic instance from server data
+                this.gameLogic = new GameLogic(gameLogicData.matchInfo);
+                
+                // Restore state from server
+                this.gameLogic.roundNo = gameLogicData.roundNo || 0;
+                this.gameLogic.priorityTeamId = gameLogicData.priorityTeamId;
+                this.gameLogic.alreadyEndedTurnUnits = gameLogicData.alreadyEndedTurnUnits || [];
+                this.gameLogic.currentTurnUnit = gameLogicData.currentTurnUnit;
+                this.gameLogic.currentTurnTeamId = gameLogicData.currentTurnTeamId;
+                this.gameLogic.currentTurnActions = gameLogicData.currentTurnActions || {
+                    hasMoved: false,
+                    hasAttacked: false,
+                    hasHealed: false,
+                    hasSacrificed: false,
+                    hasSuicided: false
+                };
+                
+                // Clear selection in appropriate cases
+                const shouldClearSelection = 
+                    // Not our turn anymore
+                    this.gameLogic.currentTurnTeamId !== this.playerTeam ||
+                    // Selected unit has ended turn (check by ID)
+                    (this.selectedUnit && this.gameLogic.alreadyEndedTurnUnits && 
+                     this.gameLogic.alreadyEndedTurnUnits.some(endedUnit => endedUnit.id === this.selectedUnit.id)) ||
+                    // Selected unit is dead
+                    (this.selectedUnit && this.selectedUnit.hp <= 0);
+                
+                console.log(`🔍 Selection check: shouldClear=${shouldClearSelection}`);
+                if (this.selectedUnit) {
+                    console.log(`  - selectedUnit: ${this.selectedUnit.name} (id: ${this.selectedUnit.id})`);
+                    console.log(`  - currentTurnTeamId: ${this.gameLogic.currentTurnTeamId}, playerTeam: ${this.playerTeam}`);
+                    console.log(`  - alreadyEndedTurnUnits:`, this.gameLogic.alreadyEndedTurnUnits?.map(u => `${u.name}(${u.id})`) || []);
+                }
+                
+                if (shouldClearSelection) {
+                    this.selectedUnit = null;
+                    this.highlightedCells = [];
+                    // Clear UI info
+                    if (window.updateSelectedUnitInfo) window.updateSelectedUnitInfo(null);
+                    if (window.updateActionInfo) window.updateActionInfo('');
+                } else if (this.selectedUnit) {
+                    // 🎯 CRITICAL: Tìm unit với updated data từ server bằng ID
+                    const allUnits = [...this.gameLogic.matchInfo.team1.units, ...this.gameLogic.matchInfo.team2.units];
+                    const updatedUnit = allUnits.find(unit => unit.id === this.selectedUnit.id);
+                    
+                    if (updatedUnit && updatedUnit.hp > 0) {
+                        // Update selected unit reference với server data (bao gồm position mới)
+                        this.selectedUnit = updatedUnit;
+                        // Update highlights for current selection với new position
+                        this.updateHighlights();
+                        // Update UI
+                        if (window.updateSelectedUnitInfo) window.updateSelectedUnitInfo(updatedUnit);
+                    } else {
+                        // Unit đã chết hoặc không tìm thấy, clear selection
+                        this.selectedUnit = null;
+                        this.highlightedCells = [];
+                        if (window.updateSelectedUnitInfo) window.updateSelectedUnitInfo(null);
+                        if (window.updateActionInfo) window.updateActionInfo('');
+                    }
+                }
             }
         }
     }
@@ -112,6 +166,20 @@ class P5BattleGraphicsMultiplayer {
     clearSelection() {
         this.selectedUnit = null;
         this.highlightedCells = [];
+        
+        // Clear UI info
+        if (window.updateSelectedUnitInfo) {
+            window.updateSelectedUnitInfo(null);
+        }
+        
+        if (window.updateActionInfo) {
+            const isMyTurn = this.gameLogic && this.gameLogic.currentTurnTeamId === this.playerTeam;
+            if (isMyTurn) {
+                window.updateActionInfo('Select a unit to see available actions');
+            } else {
+                window.updateActionInfo("Opponent's turn");
+            }
+        }
     }
 
     // Main draw function
@@ -135,7 +203,9 @@ class P5BattleGraphicsMultiplayer {
         // Draw game
         this.drawTopPanel();
         this.drawBoard();
+        
         this.drawHighlights();
+        
         this.drawUnits();
         this.drawActionIndicators();
     }
@@ -192,15 +262,18 @@ class P5BattleGraphicsMultiplayer {
         // Team info
         const teamPanelWidth = this.boardWidth / 3;
         
+        // Use gameLogic.matchInfo for updated data
+        const matchInfo = this.gameLogic?.matchInfo || this.matchInfo;
+        
         // Opponent team (always at top of panel)
-        const opponentTeam = this.isPlayerBlue ? this.matchInfo.team2 : this.matchInfo.team1;
+        const opponentTeam = this.isPlayerBlue ? matchInfo.team2 : matchInfo.team1;
         this.drawTeamPanel(opponentTeam, this.offsetX, 0, teamPanelWidth, this.topPanelHeight, false);
         
         // Current unit panel (middle)
         this.drawCurrentUnitPanel(this.offsetX + teamPanelWidth, 0, teamPanelWidth, this.topPanelHeight);
         
         // Player team (always at bottom of panel)
-        const playerTeam = this.isPlayerBlue ? this.matchInfo.team1 : this.matchInfo.team2;
+        const playerTeam = this.isPlayerBlue ? matchInfo.team1 : matchInfo.team2;
         this.drawTeamPanel(playerTeam, this.offsetX + teamPanelWidth * 2, 0, teamPanelWidth, this.topPanelHeight, true);
     }
 
@@ -320,29 +393,30 @@ class P5BattleGraphicsMultiplayer {
         }
     }
 
-    drawHighlights() {
-        this.highlightedCells.forEach(cell => {
+    drawHighlights() {        
+        this.highlightedCells.forEach((cell) => {
             const { x, y } = this.getBoardPosition(cell.row, cell.col);
             
-            this.p.fill(cell.color);
+            // Fill the cell with highlight color
+            this.p.fill(cell.color[0], cell.color[1], cell.color[2], cell.color[3] || 255);
             this.p.noStroke();
             this.p.rect(x, y, this.cellSize, this.cellSize);
             
             // Highlight border
-            this.p.stroke(cell.borderColor || [100, 100, 100]);
-            this.p.strokeWeight(2);
+            this.p.stroke(cell.borderColor[0], cell.borderColor[1], cell.borderColor[2]);
+            this.p.strokeWeight(3);
             this.p.noFill();
             this.p.rect(x, y, this.cellSize, this.cellSize);
         });
     }
 
     drawUnits() {
-        if (!this.matchInfo || !this.matchInfo.team1 || !this.matchInfo.team2) {
+        if (!this.gameLogic || !this.gameLogic.matchInfo || !this.gameLogic.matchInfo.team1 || !this.gameLogic.matchInfo.team2) {
             return;
         }
         
-        // Draw all units from both teams
-        const allUnits = [...this.matchInfo.team1.units, ...this.matchInfo.team2.units];
+        // Draw all units from both teams using updated gameLogic data
+        const allUnits = [...this.gameLogic.matchInfo.team1.units, ...this.gameLogic.matchInfo.team2.units];
         
         allUnits.forEach(unit => {
             if (unit.hp > 0 && unit.row >= 0 && unit.col >= 0) {
@@ -453,15 +527,24 @@ class P5BattleGraphicsMultiplayer {
 
     // Event handlers
     handleCanvasClick(mouseX, mouseY) {
+        console.log('🖱️ Canvas clicked at:', mouseX, mouseY);
+        console.log('🔍 Current state:', {
+            gameLogic: !!this.gameLogic,
+            currentTurnTeamId: this.gameLogic?.currentTurnTeamId,
+            playerTeam: this.playerTeam,
+            selectedUnit: this.selectedUnit?.name || 'none'
+        });
+        
         // Check if it's our turn
         if (!this.gameLogic || this.gameLogic.currentTurnTeamId !== this.playerTeam) {
-            console.log('❌ Not your turn');
+            console.log('❌ Not your turn - currentTurn:', this.gameLogic?.currentTurnTeamId, 'playerTeam:', this.playerTeam);
             return;
         }
         
         // Check if click is within board
         if (mouseX < this.offsetX || mouseX > this.offsetX + this.boardWidth ||
             mouseY < this.offsetY || mouseY > this.offsetY + this.boardHeight) {
+            console.log('❌ Click outside board bounds');
             return;
         }
         
@@ -469,21 +552,27 @@ class P5BattleGraphicsMultiplayer {
         const { row, col } = this.getLogicalPosition(mouseX, mouseY);
         
         if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= BOARD_COLS) {
+            console.log('❌ Invalid board coordinates:', row, col);
             return;
         }
         
-        console.log(`🖱️ Clicked on board position: (${row}, ${col})`);
+        console.log(`🎯 Clicked on valid board position: (${row}, ${col})`);
         
         // Find unit at clicked position
         const clickedUnit = this.getUnitAtPosition(row, col);
+        console.log('🔍 Unit at position:', clickedUnit?.name || 'none');
         
         if (!this.selectedUnit) {
             // Try to select a unit
             if (clickedUnit && this.canSelectUnit(clickedUnit)) {
+                console.log('✅ Selecting unit:', clickedUnit.name);
                 this.selectUnit(clickedUnit);
+            } else {
+                console.log('❌ Cannot select unit at this position');
             }
         } else {
             // Handle action with selected unit
+            console.log('🎮 Handling action with selected unit:', this.selectedUnit.name);
             this.handleActionClick(row, col, clickedUnit);
         }
     }
@@ -533,12 +622,15 @@ class P5BattleGraphicsMultiplayer {
     }
 
     getUnitAtPosition(row, col) {
-        if (!this.matchInfo) return null;
+        if (!this.gameLogic || !this.gameLogic.matchInfo) return null;
         
-        const allUnits = [...this.matchInfo.team1.units, ...this.matchInfo.team2.units];
-        return allUnits.find(unit => 
+        // Use gameLogic.matchInfo to get updated unit data
+        const allUnits = [...this.gameLogic.matchInfo.team1.units, ...this.gameLogic.matchInfo.team2.units];
+        const unit = allUnits.find(unit => 
             unit.row === row && unit.col === col && unit.hp > 0
         );
+        
+        return unit;
     }
 
     getUnitImageKey(unit) {
@@ -548,10 +640,21 @@ class P5BattleGraphicsMultiplayer {
     }
 
     canSelectUnit(unit) {
-        return this.gameLogic && 
-               unit.teamId === this.playerTeam &&
+        if (!this.gameLogic || !unit) return false;
+        
+        // Check if unit has ended turn by ID comparison (not object reference)
+        const hasEndedTurn = this.gameLogic.alreadyEndedTurnUnits && 
+            this.gameLogic.alreadyEndedTurnUnits.some(endedUnit => endedUnit.id === unit.id);
+        
+        console.log(`🔍 Checking canSelectUnit for ${unit.name}:`);
+        console.log(`  - teamId: ${unit.teamId}, playerTeam: ${this.playerTeam}`);
+        console.log(`  - currentTurnTeamId: ${this.gameLogic.currentTurnTeamId}`);
+        console.log(`  - hasEndedTurn: ${hasEndedTurn}`);
+        console.log(`  - alreadyEndedTurnUnits:`, this.gameLogic.alreadyEndedTurnUnits?.map(u => u.name) || []);
+        
+        return unit.teamId === this.playerTeam &&
                unit.teamId === this.gameLogic.currentTurnTeamId &&
-               !this.gameLogic.alreadyEndedTurnUnits.includes(unit) &&
+               !hasEndedTurn &&
                unit.name !== "Base" &&
                unit.hp > 0;
     }
@@ -565,6 +668,28 @@ class P5BattleGraphicsMultiplayer {
         if (window.addGameLog) {
             window.addGameLog(`Selected ${unit.name}`);
         }
+        
+        if (window.updateSelectedUnitInfo) {
+            window.updateSelectedUnitInfo(unit);
+        }
+        
+        if (window.updateActionInfo) {
+            window.updateActionInfo(`Selected ${unit.name} - Choose your action`);
+        }
+    }
+
+    // Check if currently selected unit has available actions
+    hasAvailableActionsForSelectedUnit() {
+        if (!this.selectedUnit || !this.gameLogic) return false;
+        
+        const canAttack = this.gameLogic.getAttackableTargets ? 
+            this.gameLogic.getAttackableTargets(this.selectedUnit).length > 0 : false;
+        const canHeal = this.gameLogic.getHealableTargets ? 
+            this.gameLogic.getHealableTargets(this.selectedUnit).length > 0 : false;
+        const canSacrifice = this.gameLogic.getSacrificeableTargets ? 
+            this.gameLogic.getSacrificeableTargets(this.selectedUnit).length > 0 : false;
+            
+        return canAttack || canHeal || canSacrifice;
     }
 
     updateHighlights() {
@@ -572,7 +697,7 @@ class P5BattleGraphicsMultiplayer {
         
         if (!this.selectedUnit || !this.gameLogic) return;
         
-        // Get possible actions from game logic
+        // Get ALL possible actions from game logic (theo gameplay-vn.md)
         const reachableCells = this.gameLogic.getReachableCells ? 
             this.gameLogic.getReachableCells(this.selectedUnit) : [];
         const attackableTargets = this.gameLogic.getAttackableTargets ? 
@@ -582,42 +707,46 @@ class P5BattleGraphicsMultiplayer {
         const sacrificeableTargets = this.gameLogic.getSacrificeableTargets ? 
             this.gameLogic.getSacrificeableTargets(this.selectedUnit) : [];
         
-        // Add highlights for moveable cells
+        // Add highlights for moveable cells (GREEN)
         reachableCells.forEach(cell => {
             this.highlightedCells.push({
                 row: cell.row,
                 col: cell.col,
-                color: [144, 238, 144, 100], // Light green
+                type: 'move',
+                color: [144, 238, 144, 120], // Light green with more opacity
                 borderColor: [34, 139, 34]
             });
         });
         
-        // Add highlights for attackable targets
+        // Add highlights for attackable targets (RED)
         attackableTargets.forEach(target => {
             this.highlightedCells.push({
                 row: target.row,
                 col: target.col,
-                color: [255, 99, 71, 120], // Red
+                type: 'attack',
+                color: [255, 99, 71, 150], // Red with more opacity
                 borderColor: [220, 20, 60]
             });
         });
         
-        // Add highlights for healable targets
+        // Add highlights for healable targets (BLUE)
         healableTargets.forEach(target => {
             this.highlightedCells.push({
                 row: target.row,
                 col: target.col,
-                color: [173, 216, 230, 120], // Light blue
+                type: 'heal',
+                color: [173, 216, 230, 150], // Light blue with more opacity
                 borderColor: [65, 105, 225]
             });
         });
         
-        // Add highlights for sacrificeable targets
+        // Add highlights for sacrificeable targets (YELLOW)
         sacrificeableTargets.forEach(target => {
             this.highlightedCells.push({
                 row: target.row,
                 col: target.col,
-                color: [255, 255, 224, 120], // Light yellow
+                type: 'sacrifice',
+                color: [255, 255, 224, 150], // Light yellow with more opacity
                 borderColor: [218, 165, 32]
             });
         });
@@ -626,44 +755,84 @@ class P5BattleGraphicsMultiplayer {
     handleActionClick(row, col, clickedUnit) {
         const selectedUnit = this.selectedUnit;
         
+        console.log(`🎯 Action click at (${row}, ${col}), clickedUnit:`, clickedUnit?.name || 'none');
+        
         if (clickedUnit) {
-            // Clicked on a unit
+            // Clicked on a unit - determine action type
             if (clickedUnit.id === selectedUnit.id) {
                 // Clicked on same unit - try suicide
+                console.log('🔥 Attempting suicide action');
                 this.sendAction('suicide', { unit: selectedUnit });
-            } else if (clickedUnit.teamId !== selectedUnit.teamId) {
-                // Clicked on enemy unit - try attack
+                return;
+            }
+            
+            // Check what type of action this unit can receive
+            const isAttackTarget = this.isUnitInHighlights(clickedUnit, 'attack');
+            const isHealTarget = this.isUnitInHighlights(clickedUnit, 'heal');
+            const isSacrificeTarget = this.isUnitInHighlights(clickedUnit, 'sacrifice');
+            
+            if (isAttackTarget) {
+                console.log('⚔️ Attacking target:', clickedUnit.name);
                 this.sendAction('attack', { 
                     unit: selectedUnit, 
                     target: clickedUnit 
                 });
+            } else if (isHealTarget) {
+                console.log('💚 Healing target:', clickedUnit.name);
+                this.sendAction('heal', { 
+                    unit: selectedUnit, 
+                    target: clickedUnit 
+                });
+            } else if (isSacrificeTarget) {
+                console.log('🩸 Sacrificing for target:', clickedUnit.name);
+                this.sendAction('sacrifice', { 
+                    unit: selectedUnit, 
+                    target: clickedUnit 
+                });
             } else {
-                // Clicked on ally unit - try heal or sacrifice
-                if (selectedUnit.abilities && selectedUnit.abilities.includes('heal')) {
-                    this.sendAction('heal', { 
-                        unit: selectedUnit, 
-                        target: clickedUnit 
-                    });
-                } else if (selectedUnit.abilities && selectedUnit.abilities.includes('sacrifice')) {
-                    this.sendAction('sacrifice', { 
-                        unit: selectedUnit, 
-                        target: clickedUnit 
-                    });
+                // Not a valid target, try to select this unit instead
+                if (this.canSelectUnit(clickedUnit)) {
+                    console.log('🎯 Selecting new unit:', clickedUnit.name);
+                    this.selectUnit(clickedUnit);
                 } else {
-                    // Try to select the clicked unit instead
-                    if (this.canSelectUnit(clickedUnit)) {
-                        this.selectUnit(clickedUnit);
-                    }
+                    console.log('❌ Invalid target and cannot select unit');
                 }
             }
         } else {
-            // Clicked on empty cell - try move
-            this.sendAction('move_unit', { 
-                unit: selectedUnit, 
-                row: row, 
-                col: col 
-            });
+            // Clicked on empty cell - check if it's a moveable cell
+            const isMoveableCell = this.isCellInHighlights(row, col, 'move');
+            
+            if (isMoveableCell) {
+                console.log('🚶 Moving to:', row, col);
+                this.sendAction('move_unit', { 
+                    unit: selectedUnit, 
+                    row: row, 
+                    col: col 
+                });
+            } else {
+                console.log('❌ Not a moveable cell');
+                // Clear selection if clicked on invalid cell
+                this.clearSelection();
+            }
         }
+    }
+    
+    // Helper function to check if unit is in highlights of specific type
+    isUnitInHighlights(unit, actionType) {
+        return this.highlightedCells.some(cell => 
+            cell.row === unit.row && 
+            cell.col === unit.col && 
+            cell.type === actionType
+        );
+    }
+    
+    // Helper function to check if cell is in highlights of specific type
+    isCellInHighlights(row, col, actionType) {
+        return this.highlightedCells.some(cell => 
+            cell.row === row && 
+            cell.col === col && 
+            cell.type === actionType
+        );
     }
 
     sendAction(action, actionData) {
@@ -675,8 +844,11 @@ class P5BattleGraphicsMultiplayer {
             console.error('❌ sendGameAction not available');
         }
         
-        // Clear selection after action
-        this.clearSelection();
+        // Don't clear selection immediately - wait for server response
+        // Selection will be cleared when:
+        // 1. Server updates game state and unit is in alreadyEndedTurnUnits
+        // 2. Or when it's not our turn anymore
+        console.log('⏳ Action sent, waiting for server response...');
     }
 }
 
