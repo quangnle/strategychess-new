@@ -6,6 +6,7 @@ let currentMatch = null;
 let selectedHero = null;
 let selectedUnits = [];
 let isReady = false;
+let currentPlayers = []; // Track current players in lobby
 
 // Import unit definitions
 import { UNIT_TYPES } from '../core-logic/definitions.js';
@@ -594,19 +595,28 @@ function updateUnitCounter() {
 // Update ready button
 function updateReadyButton() {
     const readyBtn = document.getElementById('ready-btn');
-    const canReady = selectedHero && selectedUnits.length === 5;
+    const hasSelectedTeam = selectedHero && selectedUnits.length === 5;
+    const hasEnoughPlayers = currentPlayers.length >= 2;
+    const canReady = hasSelectedTeam && hasEnoughPlayers;
     
     readyBtn.disabled = !canReady;
     
-    if (canReady && !isReady) {
+    if (!hasSelectedTeam) {
+        // Need to select team first
+        readyBtn.textContent = 'Select Team First';
+        readyBtn.className = 'bg-gray-600 cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
+    } else if (!hasEnoughPlayers) {
+        // Waiting for opponent
+        readyBtn.textContent = 'Waiting for Opponent...';
+        readyBtn.className = 'bg-yellow-600 cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
+    } else if (canReady && !isReady) {
+        // Ready to play
         readyBtn.textContent = 'Ready';
         readyBtn.className = 'bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
     } else if (isReady) {
+        // Currently ready, can toggle to not ready
         readyBtn.textContent = 'Not Ready';
         readyBtn.className = 'bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
-    } else {
-        readyBtn.textContent = 'Select Team First';
-        readyBtn.className = 'bg-gray-600 cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
     }
 }
 
@@ -617,6 +627,11 @@ function initializeEventHandlers() {
     readyBtn.addEventListener('click', () => {
         if (!selectedHero || selectedUnits.length !== 5) {
             alert('Please select a hero and 5 units first');
+            return;
+        }
+        
+        if (currentPlayers.length < 2) {
+            alert('Waiting for opponent to join the lobby');
             return;
         }
         
@@ -663,6 +678,9 @@ function updateMatchInfo() {
 
 // Update players status
 function updatePlayersStatus(players) {
+    // Store current players for ready button logic
+    currentPlayers = players;
+    
     const playersStatus = document.getElementById('players-status');
     playersStatus.innerHTML = '';
     
@@ -694,6 +712,9 @@ function updatePlayersStatus(players) {
         playerDiv.classList.add('border-2', statusClass);
         playersStatus.appendChild(playerDiv);
     });
+    
+    // Update ready button based on current players count
+    updateReadyButton();
 }
 
 // Show loading screen
