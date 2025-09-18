@@ -14,6 +14,13 @@ class P5BattleGraphicsMultiplayer {
         // Perspective settings - always show player team at bottom
         this.isPlayerBlue = (playerTeam === 'blue');
         
+        // TEMPORARY DEBUG
+        console.log(`🐛 DEBUG BattleGraphics Init:`, {
+            playerTeam: this.playerTeam,
+            isPlayerBlue: this.isPlayerBlue,
+            currentUserId: this.currentUserId
+        });
+        
         // UI state
         this.selectedUnit = null;
         this.highlightedCells = [];
@@ -21,7 +28,7 @@ class P5BattleGraphicsMultiplayer {
         
         // Canvas dimensions
         this.canvasWidth = 800;
-        this.canvasHeight = 700;
+        this.canvasHeight = 730;
         this.topPanelHeight = 100;
         
         // Calculate cell size
@@ -34,7 +41,7 @@ class P5BattleGraphicsMultiplayer {
         this.boardWidth = BOARD_COLS * this.cellSize;
         this.boardHeight = BOARD_ROWS * this.cellSize;
         this.offsetX = (this.canvasWidth - this.boardWidth) / 2;
-        this.offsetY = this.topPanelHeight + 10;
+        this.offsetY = this.topPanelHeight + 5;
         
         // Load images
         this.images = {};
@@ -93,6 +100,15 @@ class P5BattleGraphicsMultiplayer {
 
     // Update game state from server
     updateGameState(gameState) {
+        console.log(`🐛 DEBUG updateGameState called:`, {
+            hasGameState: !!gameState,
+            hasGameBoard: !!gameState?.gameBoard,
+            playerTeam: this.playerTeam
+        });
+        
+        // Store server game state for movement points
+        this.serverGameState = gameState;
+        
         if (gameState && gameState.gameBoard) {
             // Server sends gameLogic as plain object - need to recreate GameLogic instance
             const gameLogicData = gameState.gameBoard;
@@ -124,13 +140,6 @@ class P5BattleGraphicsMultiplayer {
                      this.gameLogic.alreadyEndedTurnUnits.some(endedUnit => endedUnit.id === this.selectedUnit.id)) ||
                     // Selected unit is dead
                     (this.selectedUnit && this.selectedUnit.hp <= 0);
-                
-                console.log(`🔍 Selection check: shouldClear=${shouldClearSelection}`);
-                if (this.selectedUnit) {
-                    console.log(`  - selectedUnit: ${this.selectedUnit.name} (id: ${this.selectedUnit.id})`);
-                    console.log(`  - currentTurnTeamId: ${this.gameLogic.currentTurnTeamId}, playerTeam: ${this.playerTeam}`);
-                    console.log(`  - alreadyEndedTurnUnits:`, this.gameLogic.alreadyEndedTurnUnits?.map(u => `${u.name}(${u.id})`) || []);
-                }
                 
                 if (shouldClearSelection) {
                     this.selectedUnit = null;
@@ -164,7 +173,7 @@ class P5BattleGraphicsMultiplayer {
 
     // Clear current selection
     clearSelection() {
-        this.selectedUnit = null;
+            this.selectedUnit = null;
         this.highlightedCells = [];
         
         // Clear UI info
@@ -199,7 +208,7 @@ class P5BattleGraphicsMultiplayer {
             this.drawGameEndScreen(gameEndResult);
             return;
         }
-        
+
         // Draw game
         this.drawTopPanel();
         this.drawBoard();
@@ -306,12 +315,35 @@ class P5BattleGraphicsMultiplayer {
         const teamLabel = isPlayerTeam ? 'YOU' : 'OPPONENT';
         this.p.text(teamLabel, x + width / 2, y + 15);
         
-        // Movement points
-        if (this.gameLogic && this.gameLogic._calculateTeamMovementPoint) {
-            const movementPoints = this.gameLogic._calculateTeamMovementPoint(team.teamId);
-            this.p.textSize(10);
-            this.p.text(`Movement: ${movementPoints}`, x + width / 2, y + 30);
+        // Movement points - prefer server-calculated values, fallback to client calculation
+        let movementPoints = 0;
+        
+        // Try to get from server first
+        if (this.serverGameState) {
+            if (team.teamId === this.gameLogic?.matchInfo?.team1?.teamId) {
+                movementPoints = this.serverGameState.team1MovementPoints || 0;
+            } else if (team.teamId === this.gameLogic?.matchInfo?.team2?.teamId) {
+                movementPoints = this.serverGameState.team2MovementPoints || 0;
+            }
         }
+        
+        // Fallback: calculate directly if server data not available
+        if (movementPoints === 0 && this.gameLogic && team) {
+            const aliveUnits = team.units.filter(u => u.hp > 0 && u.name !== "Base");
+            const notYetEndedTurnUnits = aliveUnits.filter(u => {
+                // Use ID comparison instead of object reference
+                return !this.gameLogic.alreadyEndedTurnUnits.some(endedUnit => endedUnit.id === u.id);
+            });
+            movementPoints = notYetEndedTurnUnits.reduce((total, unit) => {
+                // Get current speed - use same logic as core-logic
+                const currentSpeed = this.gameLogic._getCurrentSpeed ? 
+                    this.gameLogic._getCurrentSpeed(unit) : unit.speed;
+                return total + currentSpeed;
+            }, 0);
+        }
+        
+        this.p.textSize(10);
+        this.p.text(`Movement: ${movementPoints}`, x + width / 2, y + 30);
         
         // Turn indicator
         if (isMyTurn) {
@@ -352,10 +384,10 @@ class P5BattleGraphicsMultiplayer {
         this.p.text('SELECTED UNIT', x + width / 2, y + 12);
         
         if (this.selectedUnit) {
-            // Unit image
-            const unitSize = 30;
+            // Unit image (larger size)
+            const unitSize = 40;
             const unitX = x + width / 2 - unitSize / 2;
-            const unitY = y + 25;
+            const unitY = y + 20;
             
             const imageKey = this.getUnitImageKey(this.selectedUnit);
             if (this.images[imageKey]) {
@@ -364,9 +396,12 @@ class P5BattleGraphicsMultiplayer {
             
             // Unit info
             this.p.textSize(9);
-            this.p.text(this.selectedUnit.name, x + width / 2, y + 60);
-            this.p.text(`HP: ${this.selectedUnit.hp}`, x + width / 2, y + 72);
-            this.p.text(`Speed: ${this.selectedUnit.speed}`, x + width / 2, y + 84);
+            this.p.text(this.selectedUnit.name, x + width / 2, y + 65);
+            
+            // HP and Speed on same line with icons
+            this.p.textSize(8);
+            const statsText = `❤️ ${this.selectedUnit.hp}  🦵 ${this.selectedUnit.speed}`;
+            this.p.text(statsText, x + width / 2, y + 78);
         } else {
             this.p.textSize(9);
             this.p.text('Click unit to select', x + width / 2, y + 50);
@@ -392,7 +427,7 @@ class P5BattleGraphicsMultiplayer {
             }
         }
     }
-
+    
     drawHighlights() {        
         this.highlightedCells.forEach((cell) => {
             const { x, y } = this.getBoardPosition(cell.row, cell.col);
@@ -424,7 +459,7 @@ class P5BattleGraphicsMultiplayer {
             }
         });
     }
-
+    
     drawUnit(unit) {
         const { x, y } = this.getBoardPosition(unit.row, unit.col);
         
@@ -457,14 +492,14 @@ class P5BattleGraphicsMultiplayer {
             
             this.p.image(this.images[imageKey], imgX, imgY, imgSize, imgSize);
         }
-        
+            
         // HP bar
         this.drawHPBar(unit, x, y, unitColor);
-        
+            
         // Effect indicators
-        this.drawEffectIndicators(unit, x, y);
+            this.drawEffectIndicators(unit, x, y);
     }
-
+    
     drawHPBar(unit, x, y, unitColor) {
         const barWidth = this.cellSize * 0.8;
         const barHeight = 4;
@@ -489,7 +524,7 @@ class P5BattleGraphicsMultiplayer {
         }
         this.p.rect(barX, barY, hpWidth, barHeight);
     }
-
+    
     drawEffectIndicators(unit, x, y) {
         if (!unit.effects || unit.effects.length === 0) return;
         
@@ -555,13 +590,13 @@ class P5BattleGraphicsMultiplayer {
             console.log('❌ Invalid board coordinates:', row, col);
             return;
         }
-        
+
         console.log(`🎯 Clicked on valid board position: (${row}, ${col})`);
         
         // Find unit at clicked position
         const clickedUnit = this.getUnitAtPosition(row, col);
         console.log('🔍 Unit at position:', clickedUnit?.name || 'none');
-        
+
         if (!this.selectedUnit) {
             // Try to select a unit
             if (clickedUnit && this.canSelectUnit(clickedUnit)) {
@@ -569,9 +604,19 @@ class P5BattleGraphicsMultiplayer {
                 this.selectUnit(clickedUnit);
             } else {
                 console.log('❌ Cannot select unit at this position');
+                if (clickedUnit) {
+                    console.log('🐛 DEBUG canSelectUnit failed for unit:', {
+                        name: clickedUnit.name,
+                        teamId: clickedUnit.teamId,
+                        playerTeam: this.playerTeam,
+                        hasGameLogic: !!this.gameLogic,
+                        currentTurnTeamId: this.gameLogic?.currentTurnTeamId,
+                        alreadyEndedTurnUnits: this.gameLogic?.alreadyEndedTurnUnits?.length || 0
+                    });
+                }
             }
         } else {
-            // Handle action with selected unit
+        // Handle action with selected unit
             console.log('🎮 Handling action with selected unit:', this.selectedUnit.name);
             this.handleActionClick(row, col, clickedUnit);
         }
@@ -580,10 +625,13 @@ class P5BattleGraphicsMultiplayer {
     handleKeyPress(key) {
         if (key === 'Escape') {
             this.clearSelection();
-        } else if (key === 'Enter' || key === ' ') {
-            // End turn
+        } else if (key === 's' || key === 'S') {
+            // Skip turn
             if (this.gameLogic && this.gameLogic.currentTurnTeamId === this.playerTeam) {
                 this.sendAction('end_turn', {});
+                if (window.addGameLog) {
+                    window.addGameLog('You skipped your turn');
+                }
             }
         }
     }
@@ -646,12 +694,6 @@ class P5BattleGraphicsMultiplayer {
         const hasEndedTurn = this.gameLogic.alreadyEndedTurnUnits && 
             this.gameLogic.alreadyEndedTurnUnits.some(endedUnit => endedUnit.id === unit.id);
         
-        console.log(`🔍 Checking canSelectUnit for ${unit.name}:`);
-        console.log(`  - teamId: ${unit.teamId}, playerTeam: ${this.playerTeam}`);
-        console.log(`  - currentTurnTeamId: ${this.gameLogic.currentTurnTeamId}`);
-        console.log(`  - hasEndedTurn: ${hasEndedTurn}`);
-        console.log(`  - alreadyEndedTurnUnits:`, this.gameLogic.alreadyEndedTurnUnits?.map(u => u.name) || []);
-        
         return unit.teamId === this.playerTeam &&
                unit.teamId === this.gameLogic.currentTurnTeamId &&
                !hasEndedTurn &&
@@ -698,7 +740,7 @@ class P5BattleGraphicsMultiplayer {
         if (!this.selectedUnit || !this.gameLogic) return;
         
         // Get ALL possible actions from game logic (theo gameplay-vn.md)
-        const reachableCells = this.gameLogic.getReachableCells ? 
+        let reachableCells = this.gameLogic.getReachableCells ? 
             this.gameLogic.getReachableCells(this.selectedUnit) : [];
         const attackableTargets = this.gameLogic.getAttackableTargets ? 
             this.gameLogic.getAttackableTargets(this.selectedUnit) : [];
@@ -706,6 +748,11 @@ class P5BattleGraphicsMultiplayer {
             this.gameLogic.getHealableTargets(this.selectedUnit) : [];
         const sacrificeableTargets = this.gameLogic.getSacrificeableTargets ? 
             this.gameLogic.getSacrificeableTargets(this.selectedUnit) : [];
+
+        // Nếu unit hiện tại đã move thì không hiển thị ô moveable
+        if (this.gameLogic.currentTurnActions.hasMoved) {
+            reachableCells = [];
+        }
         
         // Add highlights for moveable cells (GREEN)
         reachableCells.forEach(cell => {
@@ -809,7 +856,7 @@ class P5BattleGraphicsMultiplayer {
                     row: row, 
                     col: col 
                 });
-            } else {
+        } else {
                 console.log('❌ Not a moveable cell');
                 // Clear selection if clicked on invalid cell
                 this.clearSelection();

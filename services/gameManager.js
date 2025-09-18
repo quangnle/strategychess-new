@@ -264,9 +264,13 @@ class GameInstance {
             winner: this.winner,
             createdAt: this.createdAt,
             endedAt: this.endedAt,
-            // Additional game info for UI
-            currentTurnInfo: this.gameLogic.getCurrentTurnInfo(),
-            alreadyEndedTurnUnits: this.gameLogic.alreadyEndedTurnUnits || []
+            // Additional game info for UI  
+            alreadyEndedTurnUnits: this.gameLogic.alreadyEndedTurnUnits || [],
+            // Add movement points for both teams
+            team1MovementPoints: this.gameLogic._calculateTeamMovementPoint ? 
+                this.gameLogic._calculateTeamMovementPoint(this.gameLogic.matchInfo.team1.teamId) : 0,
+            team2MovementPoints: this.gameLogic._calculateTeamMovementPoint ? 
+                this.gameLogic._calculateTeamMovementPoint(this.gameLogic.matchInfo.team2.teamId) : 0
         };
     }
     

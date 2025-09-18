@@ -31,34 +31,20 @@
         <div class="container mx-auto px-4">
             <div class="flex items-center justify-between">
                 <!-- Game Info -->
-                <div class="flex items-center space-x-6">
+                <div class="flex items-center">
                     <div>
                         <h1 class="text-xl font-bold text-yellow-400">Strategy Chess</h1>
-                        <div id="match-info" class="text-sm text-gray-300">
-                            Loading match...
-                        </div>
-                    </div>
-                    <!-- Game Status -->
-                    <div class="hidden md:block">
-                        <div id="game-status" class="text-sm">
-                            <div class="text-green-400" id="connection-status">🟢 Connected</div>
-                        </div>
                     </div>
                 </div>
                 
                 <!-- Game Controls -->
                 <div class="flex items-center space-x-4">
-                    <!-- Turn Info -->
-                    <div id="turn-info" class="text-center hidden md:block">
-                        <div class="text-sm text-gray-400">Turn</div>
-                        <div class="font-bold" id="current-turn">Waiting...</div>
-                    </div>
-                    
                     <!-- Action Buttons -->
                     <div class="flex space-x-2">
-                        <button id="end-turn-btn" 
-                                class="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded transition-colors">
-                            End Turn
+                        <button id="skip-turn-btn" 
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
+                                style="display: none;">
+                            Skip Turn
                         </button>
                         <button id="leave-game-btn" 
                                 class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded transition-colors">
@@ -111,13 +97,6 @@
 
         <!-- Game Board Area -->
         <div class="flex-1 flex flex-col">
-            <!-- Mobile Turn Info -->
-            <div class="lg:hidden bg-gray-800 border-b border-gray-700 p-2 text-center">
-                <div id="mobile-turn-info" class="text-sm">
-                    <span class="text-gray-400">Turn:</span> 
-                    <span id="mobile-current-turn" class="font-bold">Waiting...</span>
-                </div>
-            </div>
 
             <!-- Game Canvas Container -->
             <div class="flex-1 flex items-center justify-center p-4">

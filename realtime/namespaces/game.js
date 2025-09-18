@@ -16,6 +16,14 @@ function registerGameNS(gameNamespace) {
         socket.on('game:authenticate', (data) => {
             const { userId, username } = data;
             
+            console.log(`🐛 DEBUG AUTHENTICATION - game:authenticate received:`, {
+                socketId: socket.id,
+                userId: userId,
+                username: username,
+                socketAddress: socket.handshake.address,
+                timestamp: new Date().toISOString()
+            });
+            
             if (!userId || !username) {
                 socket.emit('error', { message: 'User ID and username are required' });
                 return;

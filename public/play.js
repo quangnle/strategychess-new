@@ -48,7 +48,12 @@ function initializeGame(matchId) {
     }
     
     const lobbyUser = JSON.parse(lobbyUserData);
-    console.log('👤 User data:', lobbyUser);
+    console.log('🐛 DEBUG AUTHENTICATION - lobbyUser from localStorage:', {
+        userId: lobbyUser.userId,
+        username: lobbyUser.username,
+        matchId: matchId,
+        timestamp: new Date().toISOString()
+    });
     
     // Connect to game namespace
     gameSocket = io('/game');
@@ -56,7 +61,6 @@ function initializeGame(matchId) {
     // Connection handlers
     gameSocket.on('connect', () => {
         console.log('✅ Connected to game server');
-        updateConnectionStatus(true);
         
         // Authenticate first
         gameSocket.emit('game:authenticate', {
@@ -67,7 +71,6 @@ function initializeGame(matchId) {
     
     gameSocket.on('disconnect', () => {
         console.log('❌ Disconnected from game server');
-        updateConnectionStatus(false);
         showConnectionLostModal();
     });
     
@@ -85,6 +88,12 @@ function initializeGame(matchId) {
     gameSocket.on('game:joined', (data) => {
         console.log('🎯 Joined game successfully:', data);
         
+        console.log('🐛 DEBUG AUTHENTICATION - game:joined playerInfo:', {
+            playerInfo: data.playerInfo,
+            matchId: data.matchId,
+            timestamp: new Date().toISOString()
+        });
+        
         currentMatch = data;
         currentUser = data.playerInfo;
         gameState = data.gameState;
@@ -94,12 +103,14 @@ function initializeGame(matchId) {
             opponent = data.gameState.players.find(p => p.userId !== currentUser.userId);
         }
         
-        updateMatchInfo();
         updatePlayerInfo();
         hideLoadingOverlay();
         
         // Initialize battle graphics
         initializeBattleGraphics(data.matchInfo);
+        
+        // Update skip turn button after graphics are ready
+        setTimeout(() => updateEndTurnButton(), 100);
         
         // Start game timer
         startGameTimer();
@@ -108,14 +119,79 @@ function initializeGame(matchId) {
     // Game state updates
     gameSocket.on('game:state', (data) => {
         console.log('🔄 Game state updated:', data);
+        
+        // 🔍 DEBUG: Check movement points data from server
+        console.log('🔍 DEBUG Movement Points from Server:', {
+            team1MovementPoints: data.gameState?.team1MovementPoints,
+            team2MovementPoints: data.gameState?.team2MovementPoints,
+            hasGameBoard: !!data.gameState?.gameBoard
+        });
+        
+        if (data.gameState?.gameBoard) {
+            const gameLogic = data.gameState.gameBoard;
+            console.log('🔍 DEBUG Movement Points Data:', {
+                hasGameLogic: !!gameLogic,
+                hasCalculateMethod: !!gameLogic._calculateTeamMovementPoint,
+                alreadyEndedTurnUnits: gameLogic.alreadyEndedTurnUnits?.length || 0,
+                currentTurnTeamId: gameLogic.currentTurnTeamId,
+                team1Id: gameLogic.matchInfo?.team1?.teamId,
+                team2Id: gameLogic.matchInfo?.team2?.teamId,
+                team1Units: gameLogic.matchInfo?.team1?.units?.length || 0,
+                team2Units: gameLogic.matchInfo?.team2?.units?.length || 0
+            });
+            
+            // Try to calculate movement points manually
+            if (gameLogic.matchInfo) {
+                try {
+                    console.log('🔍 Manual Movement Points Calculation:');
+                    [gameLogic.matchInfo.team1, gameLogic.matchInfo.team2].forEach(team => {
+                        if (team) {
+                            const aliveUnits = team.units.filter(u => u.hp > 0 && u.name !== "Base");
+                            const endedUnits = gameLogic.alreadyEndedTurnUnits || [];
+                            const notYetEndedUnits = aliveUnits.filter(u => 
+                                !endedUnits.some(endedUnit => endedUnit.id === u.id)
+                            );
+                            const totalMovement = notYetEndedUnits.reduce((sum, unit) => sum + unit.speed, 0);
+                            console.log(`   Team ${team.teamId}: ${totalMovement} points (${notYetEndedUnits.length}/${aliveUnits.length} units available)`);
+                        }
+                    });
+                } catch (error) {
+                    console.error('❌ Error calculating movement points:', error);
+                }
+            }
+        }
+        
         gameState = data.gameState;
+        
+        // Update battle graphics
+        if (battleGraphics) {
+            battleGraphics.updateGameState(data.gameState);
+        }
+        
         updateGameDisplay();
+        updateEndTurnButton();
     });
     
     // Action results
     gameSocket.on('game:action_result', (data) => {
         console.log('⚡ Action result received:', data);
         console.log('🔄 Updating game state from action result');
+        
+        // 🔍 DEBUG: Check if movement points changed after action
+        console.log('🔍 DEBUG Movement Points After Action:', {
+            action: data.action,
+            result: data.result,
+            team1MovementPoints: data.gameState?.team1MovementPoints,
+            team2MovementPoints: data.gameState?.team2MovementPoints
+        });
+        
+        if (data.gameState?.gameBoard) {
+            const gameLogic = data.gameState.gameBoard;
+            console.log('🔍 DEBUG GameLogic After Action:', {
+                alreadyEndedTurnUnits: gameLogic.alreadyEndedTurnUnits?.length || 0,
+                currentTurnTeamId: gameLogic.currentTurnTeamId
+            });
+        }
         
         // Update game state
         if (data.gameState) {
@@ -129,6 +205,9 @@ function initializeGame(matchId) {
         // Update battle graphics if available
         if (battleGraphics) {
             battleGraphics.updateGameState(data.gameState);
+            
+            // Update skip turn button after game state changes
+            updateEndTurnButton();
             
             // 🎯 CRITICAL: Sau move, check và update highlights cho available actions
             if (data.action === 'move_unit' && data.result === true) {
@@ -224,11 +303,12 @@ async function initializeBattleGraphics(matchInfo) {
 
 // Initialize event handlers
 function initializeEventHandlers() {
-    // End turn button
-    const endTurnBtn = document.getElementById('end-turn-btn');
-    if (endTurnBtn) {
-        endTurnBtn.addEventListener('click', () => {
+    // Skip turn button
+    const skipTurnBtn = document.getElementById('skip-turn-btn');
+    if (skipTurnBtn) {
+        skipTurnBtn.addEventListener('click', () => {
             sendGameAction('end_turn', {});
+            addGameLog('You skipped your turn');
         });
     }
     
@@ -282,9 +362,10 @@ function initializeEventHandlers() {
             if (battleGraphics) {
                 battleGraphics.clearSelection();
             }
-        } else if (e.key === 'Enter' && e.ctrlKey) {
-            // End turn with Ctrl+Enter
+        } else if (e.key === 's' || e.key === 'S') {
+            // Skip turn with S key
             sendGameAction('end_turn', {});
+            addGameLog('You skipped your turn (S key)');
         }
     });
 }
@@ -397,16 +478,6 @@ function leaveGame() {
 }
 
 // Update UI functions
-function updateMatchInfo() {
-    const matchInfoElement = document.getElementById('match-info');
-    if (matchInfoElement && currentMatch && opponent) {
-        matchInfoElement.innerHTML = `
-            <div>Match: ${currentMatch.matchName || 'Multiplayer Game'}</div>
-            <div>vs ${opponent.username}</div>
-        `;
-    }
-}
-
 function updatePlayerInfo() {
     // Update player username
     const playerUsernameElement = document.getElementById('player-username');
@@ -424,9 +495,6 @@ function updatePlayerInfo() {
 function updateGameDisplay() {
     if (!gameState) return;
     
-    // Update turn info
-    updateTurnInfo();
-    
     // Update round info
     const roundElement = document.getElementById('round-number');
     if (roundElement) {
@@ -440,50 +508,6 @@ function updateGameDisplay() {
     updateEndTurnButton();
 }
 
-function updateTurnInfo() {
-    const currentTurnElement = document.getElementById('current-turn');
-    const mobileTurnElement = document.getElementById('mobile-current-turn');
-    
-    if (!gameState || !gameState.currentPlayer) {
-        if (currentTurnElement) currentTurnElement.textContent = 'Waiting...';
-        if (mobileTurnElement) mobileTurnElement.textContent = 'Waiting...';
-        return;
-    }
-    
-    const isMyTurn = gameState.currentPlayer === currentUser.userId;
-    const turnText = isMyTurn ? 'Your Turn' : `${opponent?.username || 'Opponent'}'s Turn`;
-    const turnClass = isMyTurn ? 'text-green-400' : 'text-red-400';
-    
-    if (currentTurnElement) {
-        currentTurnElement.textContent = turnText;
-        currentTurnElement.className = turnClass;
-    }
-    
-    if (mobileTurnElement) {
-        mobileTurnElement.textContent = turnText;
-        mobileTurnElement.className = turnClass;
-    }
-    
-    // Update player panels active state
-    const playerPanel = document.getElementById('player-team-panel');
-    const opponentPanel = document.getElementById('opponent-team-panel');
-    
-    if (playerPanel) {
-        if (isMyTurn) {
-            playerPanel.classList.add('active-turn');
-        } else {
-            playerPanel.classList.remove('active-turn');
-        }
-    }
-    
-    if (opponentPanel) {
-        if (!isMyTurn) {
-            opponentPanel.classList.add('active-turn');
-        } else {
-            opponentPanel.classList.remove('active-turn');
-        }
-    }
-}
 
 function updateTeamPanels() {
     // This would show unit status, but for now we'll keep it simple
@@ -491,34 +515,32 @@ function updateTeamPanels() {
 }
 
 function updateEndTurnButton() {
-    const endTurnBtn = document.getElementById('end-turn-btn');
-    if (!endTurnBtn) return;
+    const skipTurnBtn = document.getElementById('skip-turn-btn');
     
-    const isMyTurn = gameState && gameState.currentPlayer === currentUser.userId;
-    
-    endTurnBtn.disabled = !isMyTurn;
-    
-    if (isMyTurn) {
-        endTurnBtn.textContent = 'End Turn';
-        endTurnBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors';
-    } else {
-        endTurnBtn.textContent = 'Not Your Turn';
-        endTurnBtn.className = 'bg-gray-600 cursor-not-allowed text-white px-4 py-2 rounded transition-colors';
+    // In multiplayer, check if it's player's turn using gameLogic
+    let isMyTurn = false;
+    if (battleGraphics && battleGraphics.gameLogic && currentUser) {
+        isMyTurn = battleGraphics.gameLogic.currentTurnTeamId === battleGraphics.playerTeam;
     }
-}
-
-function updateConnectionStatus(connected) {
-    const statusElement = document.getElementById('connection-status');
-    if (statusElement) {
-        if (connected) {
-            statusElement.innerHTML = '🟢 Connected';
-            statusElement.className = 'text-green-400';
+    
+    console.log('🔍 DEBUG Skip Turn Button:', {
+        hasSkipBtn: !!skipTurnBtn,
+        hasGameLogic: !!battleGraphics?.gameLogic,
+        currentTurnTeamId: battleGraphics?.gameLogic?.currentTurnTeamId,
+        playerTeam: battleGraphics?.playerTeam,
+        isMyTurn: isMyTurn
+    });
+    
+    // Show Skip Turn button only when it's player's turn
+    if (skipTurnBtn) {
+        if (isMyTurn) {
+            skipTurnBtn.style.display = 'block';
         } else {
-            statusElement.innerHTML = '🔴 Disconnected';
-            statusElement.className = 'text-red-400';
+            skipTurnBtn.style.display = 'none';
         }
     }
 }
+
 
 // Game timer functions
 function startGameTimer() {

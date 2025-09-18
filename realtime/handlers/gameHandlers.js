@@ -271,18 +271,27 @@ class GameHandlers {
         // Get all players in the match
         const players = this.service.store.getMatchPlayers(match.id);
         
+        console.log(`🐛 DEBUG determinePlayerTeam for ${player.username} (${player.userId}):`);
+        console.log(`  - players.length: ${players.length}`);
+        console.log(`  - players:`, players.map(p => ({ userId: p.userId, username: p.username, joinedAt: p.joinedAt })));
+        
         // If there are exactly 2 players, assign teams based on order
         if (players.length === 2) {
             const sortedPlayers = players.sort((a, b) => a.joinedAt - b.joinedAt);
             
+            console.log(`  - sortedPlayers:`, sortedPlayers.map(p => ({ userId: p.userId, username: p.username, joinedAt: p.joinedAt })));
+            
             // First player gets blue team, second gets red team
             if (player.userId === sortedPlayers[0].userId) {
+                console.log(`  - RESULT: blue (first player)`);
                 return 'blue';
             } else {
+                console.log(`  - RESULT: red (second player)`);
                 return 'red';
             }
         }
         
+        console.log(`  - FALLBACK: blue (players.length = ${players.length})`);
         // Default fallback
         return 'blue';
     }

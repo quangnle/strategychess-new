@@ -146,6 +146,11 @@ class GameLogic {
             return false;
         }
 
+        // Kiểm tra xem unit đã move chưa
+        if (this.currentTurnActions.hasMoved) {
+            return false;
+        }
+
         // check if unit has effect LOCK in the effect list
         const effect = unit.effects.find(e => e.name === LOCK);
         if (effect) {            
