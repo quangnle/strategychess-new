@@ -690,6 +690,12 @@ class P5BattleGraphicsMultiplayer {
     canSelectUnit(unit) {
         if (!this.gameLogic || !unit) return false;
         
+        // If there's a currentTurnUnit, only allow selecting that specific unit
+        if (this.gameLogic.currentTurnUnit) {
+            return unit.id === this.gameLogic.currentTurnUnit.id;
+        }
+        
+        // Original logic for when no currentTurnUnit (start of turn selection)
         // Check if unit has ended turn by ID comparison (not object reference)
         const hasEndedTurn = this.gameLogic.alreadyEndedTurnUnits && 
             this.gameLogic.alreadyEndedTurnUnits.some(endedUnit => endedUnit.id === unit.id);

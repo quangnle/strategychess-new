@@ -441,6 +441,11 @@ class GameLogic {
             return [];
         }
 
+        // kiểm tra nếu unit đang bị ADJACENT_PENALTY thì không thể attack
+        if (unit.effects.find(e => e.name === ADJACENT_PENALTY)) {
+            return [];
+        }
+
         const attackableTargets = this._getEnemiesWithinRange(unit, unit.range);
         return attackableTargets;
     }
