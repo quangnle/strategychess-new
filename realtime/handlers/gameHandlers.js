@@ -174,8 +174,10 @@ class GameHandlers {
                     playerId: socket.userId,
                     result: result.result,
                     gameState: result.gameState,
-                    gameEnded: result.gameEnded
+                    gameEnded: result.gameEnded,
+                    actionDetails: result.actionDetails // ✅ CRITICAL FIX: Include actionDetails
                 });
+                
                 
                 // If game ended, notify all players
                 if (result.gameEnded) {

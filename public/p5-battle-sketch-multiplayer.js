@@ -25,6 +25,8 @@ class P5BattleGraphicsMultiplayer {
         this.selectedUnit = null;
         this.highlightedCells = [];
         this.actionIndicators = [];
+        this.currentTurnActionArrows = [];
+        this.lastTurnTeamId = null;
         
         // Canvas dimensions
         this.canvasWidth = 800;
@@ -131,6 +133,14 @@ class P5BattleGraphicsMultiplayer {
                     hasSuicided: false
                 };
                 
+                // Track team changes for other purposes (no arrow clearing needed)
+                if (this.lastTurnTeamId !== null && this.lastTurnTeamId !== this.gameLogic.currentTurnTeamId) {
+                    console.log('🔄 Team turn changed from', this.lastTurnTeamId, 'to', this.gameLogic.currentTurnTeamId);
+                    // Note: Arrow clearing now handled per-action, not per-team-change
+                }
+                
+                this.lastTurnTeamId = this.gameLogic.currentTurnTeamId;
+                
                 // Clear selection in appropriate cases
                 const shouldClearSelection = 
                     // Not our turn anymore
@@ -191,6 +201,108 @@ class P5BattleGraphicsMultiplayer {
         }
     }
 
+    // Action visualization methods
+    addActionVisualization(actionDetails) {
+        if (!actionDetails) {
+            console.warn('❌ actionDetails is null/undefined');
+            return;
+        }
+        
+        const arrows = this.createActionArrow(actionDetails);
+        
+        if (arrows) {
+            if (Array.isArray(arrows)) {
+                // Multiple arrows (e.g., suicide)
+                this.currentTurnActionArrows.push(...arrows);
+            } else {
+                // Single arrow
+                this.currentTurnActionArrows.push(arrows);
+            }
+        } else {
+            console.warn('❌ createActionArrow returned null/undefined for:', actionDetails.type);
+        }
+    }
+
+    createActionArrow(details) {
+        if (!details) {
+            console.warn('❌ createActionArrow: details is null/undefined');
+            return null;
+        }
+        
+        switch(details.type) {
+            case 'move':
+                const arrow = {
+                    type: 'move',
+                    from: details.fromPosition,
+                    to: details.toPosition,
+                    color: [0, 100, 255], // Blue
+                    style: 'solid',
+                    width: 3
+                };
+                
+                
+                return arrow;
+                
+            case 'attack':
+                if (!details.attacker || !details.target) {
+                    console.warn('❌ Attack arrow: Missing attacker or target');
+                    return null;
+                }
+                
+                return {
+                    type: 'attack',
+                    from: { row: details.attacker.row, col: details.attacker.col },
+                    to: { row: details.target.row, col: details.target.col },
+                    color: [255, 0, 0], // Red
+                    style: 'solid',
+                    width: 3
+                };
+                
+            case 'heal':
+                return {
+                    type: 'heal',
+                    from: { row: details.healer.row, col: details.healer.col },
+                    to: { row: details.target.row, col: details.target.col },
+                    color: [0, 255, 0], // Green
+                    style: 'solid',
+                    width: 3
+                };
+                
+            case 'sacrifice':
+                return {
+                    type: 'sacrifice',
+                    from: { row: details.sacrificer.row, col: details.sacrificer.col },
+                    to: { row: details.target.row, col: details.target.col },
+                    color: [128, 0, 128], // Purple
+                    style: 'solid',
+                    width: 3
+                };
+                
+            case 'suicide':
+                // Create multiple arrows for each affected target
+                if (!details.affectedTargets || details.affectedTargets.length === 0) {
+                    return null;
+                }
+                
+                return details.affectedTargets.map(target => ({
+                    type: 'suicide',
+                    from: details.suicidePosition,
+                    to: { row: target.row, col: target.col },
+                    color: [255, 0, 0], // Red
+                    style: 'dashed',
+                    width: 2
+                }));
+                
+            default:
+                console.warn('Unknown action type for visualization:', details.type);
+                return null;
+        }
+    }
+
+    clearActionArrows() {
+        this.currentTurnActionArrows = [];
+    }
+
     // Main draw function
     draw() {
         // Clear background
@@ -216,7 +328,9 @@ class P5BattleGraphicsMultiplayer {
         this.drawHighlights();
         
         this.drawUnits();
+        this.drawActionArrows();
         this.drawActionIndicators();
+        
     }
 
     drawLoadingScreen() {
@@ -443,6 +557,86 @@ class P5BattleGraphicsMultiplayer {
             this.p.noFill();
             this.p.rect(x, y, this.cellSize, this.cellSize);
         });
+    }
+
+    drawActionArrows() {
+        this.currentTurnActionArrows.forEach((arrow, index) => {
+            this.drawArrow(arrow.from, arrow.to, arrow.color, arrow.style, arrow.width);
+        });
+    }
+
+    drawArrow(from, to, color, style = 'solid', width = 3) {
+        if (!from || !to) {
+            console.warn('❌ drawArrow: Invalid from/to positions:', { from, to });
+            return;
+        }
+        
+        if (from.row === undefined || from.col === undefined || to.row === undefined || to.col === undefined) {
+            console.warn('❌ drawArrow: Missing row/col in positions:', { from, to });
+            return;
+        }
+        
+        // Get screen positions
+        const fromPos = this.getBoardPosition(from.row, from.col);
+        const toPos = this.getBoardPosition(to.row, to.col);
+        
+        // Calculate center of cells
+        const x1 = fromPos.x + this.cellSize / 2;
+        const y1 = fromPos.y + this.cellSize / 2;
+        const x2 = toPos.x + this.cellSize / 2;
+        const y2 = toPos.y + this.cellSize / 2;
+        
+        // Don't draw arrow if from and to are the same
+        if (x1 === x2 && y1 === y2) return;
+        
+        // Set arrow style with transparency
+        this.p.stroke(color[0], color[1], color[2], 120); // 120/255 = ~47% opacity
+        this.p.strokeWeight(width);
+        
+        if (style === 'dashed') {
+            // Draw dashed line
+            this.drawDashedLine(x1, y1, x2, y2, 10, 5);
+        } else {
+            // Draw solid line
+            this.p.line(x1, y1, x2, y2);
+        }
+        
+        // Draw arrowhead
+        this.drawArrowHead(x1, y1, x2, y2, color, width);
+    }
+
+    drawDashedLine(x1, y1, x2, y2, dashLength, gapLength) {
+        const distance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        const totalDashGap = dashLength + gapLength;
+        const numDashes = Math.floor(distance / totalDashGap);
+        
+        const deltaX = (x2 - x1) / distance;
+        const deltaY = (y2 - y1) / distance;
+        
+        for (let i = 0; i < numDashes; i++) {
+            const startX = x1 + deltaX * i * totalDashGap;
+            const startY = y1 + deltaY * i * totalDashGap;
+            const endX = startX + deltaX * dashLength;
+            const endY = startY + deltaY * dashLength;
+            
+            this.p.line(startX, startY, endX, endY);
+        }
+    }
+
+    drawArrowHead(x1, y1, x2, y2, color, width) {
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const arrowSize = Math.max(8, width * 2);
+        
+        // Calculate arrowhead points
+        const x3 = x2 - arrowSize * Math.cos(angle - Math.PI / 6);
+        const y3 = y2 - arrowSize * Math.sin(angle - Math.PI / 6);
+        const x4 = x2 - arrowSize * Math.cos(angle + Math.PI / 6);
+        const y4 = y2 - arrowSize * Math.sin(angle + Math.PI / 6);
+        
+        // Draw filled arrowhead with transparency
+        this.p.fill(color[0], color[1], color[2], 120); // 120/255 = ~47% opacity
+        this.p.noStroke();
+        this.p.triangle(x2, y2, x3, y3, x4, y4);
     }
 
     drawUnits() {
@@ -730,12 +924,25 @@ class P5BattleGraphicsMultiplayer {
     hasAvailableActionsForSelectedUnit() {
         if (!this.selectedUnit || !this.gameLogic) return false;
         
+        // Same workaround as updateHighlights for action preview
+        const originalCurrentTurnUnit = this.gameLogic.currentTurnUnit;
+        const isCurrentTurnUnit = this.selectedUnit.id === originalCurrentTurnUnit?.id;
+        
+        if (!isCurrentTurnUnit && this.selectedUnit.teamId === this.gameLogic.currentTurnTeamId) {
+            this.gameLogic.currentTurnUnit = this.selectedUnit;
+        }
+        
         const canAttack = this.gameLogic.getAttackableTargets ? 
             this.gameLogic.getAttackableTargets(this.selectedUnit).length > 0 : false;
         const canHeal = this.gameLogic.getHealableTargets ? 
             this.gameLogic.getHealableTargets(this.selectedUnit).length > 0 : false;
         const canSacrifice = this.gameLogic.getSacrificeableTargets ? 
             this.gameLogic.getSacrificeableTargets(this.selectedUnit).length > 0 : false;
+        
+        // Restore original currentTurnUnit
+        if (!isCurrentTurnUnit) {
+            this.gameLogic.currentTurnUnit = originalCurrentTurnUnit;
+        }
             
         return canAttack || canHeal || canSacrifice;
     }
@@ -748,12 +955,33 @@ class P5BattleGraphicsMultiplayer {
         // Get ALL possible actions from game logic (theo gameplay-vn.md)
         let reachableCells = this.gameLogic.getReachableCells ? 
             this.gameLogic.getReachableCells(this.selectedUnit) : [];
-        const attackableTargets = this.gameLogic.getAttackableTargets ? 
+        
+        // 🔧 WORKAROUND: getAttackableTargets chỉ hoạt động khi unit = currentTurnUnit
+        // Nếu chưa phải currentTurnUnit, tạm set để preview targets
+        let attackableTargets = [];
+        let healableTargets = [];
+        let sacrificeableTargets = [];
+        
+        const originalCurrentTurnUnit = this.gameLogic.currentTurnUnit;
+        const isCurrentTurnUnit = this.selectedUnit.id === originalCurrentTurnUnit?.id;
+        
+        if (!isCurrentTurnUnit && this.selectedUnit.teamId === this.gameLogic.currentTurnTeamId) {
+            // Tạm set làm currentTurnUnit để preview actions
+            this.gameLogic.currentTurnUnit = this.selectedUnit;
+        }
+        
+        attackableTargets = this.gameLogic.getAttackableTargets ? 
             this.gameLogic.getAttackableTargets(this.selectedUnit) : [];
-        const healableTargets = this.gameLogic.getHealableTargets ? 
+        healableTargets = this.gameLogic.getHealableTargets ? 
             this.gameLogic.getHealableTargets(this.selectedUnit) : [];
-        const sacrificeableTargets = this.gameLogic.getSacrificeableTargets ? 
+        sacrificeableTargets = this.gameLogic.getSacrificeableTargets ? 
             this.gameLogic.getSacrificeableTargets(this.selectedUnit) : [];
+        
+        // Restore original currentTurnUnit
+        if (!isCurrentTurnUnit) {
+            this.gameLogic.currentTurnUnit = originalCurrentTurnUnit;
+        }
+
 
         // Nếu unit hiện tại đã move thì không hiển thị ô moveable
         if (this.gameLogic.currentTurnActions.hasMoved) {

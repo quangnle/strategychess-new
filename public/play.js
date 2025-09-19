@@ -175,6 +175,8 @@ function initializeGame(matchId) {
     // Action results
     gameSocket.on('game:action_result', (data) => {
         console.log('⚡ Action result received:', data);
+        console.log('🔍 DEBUG: data.actionDetails =', data.actionDetails);
+        console.log('🔍 DEBUG: data.result =', data.result);
         console.log('🔄 Updating game state from action result');
         
         // 🔍 DEBUG: Check if movement points changed after action
@@ -204,6 +206,15 @@ function initializeGame(matchId) {
         
         // Update battle graphics if available
         if (battleGraphics) {
+            // Process action visualization BEFORE updating game state
+            // to avoid clearing arrows during turn change detection
+            if (data.actionDetails && data.result) {
+                // 🔧 CRITICAL FIX: Clear old arrows BEFORE adding new ones
+                // This ensures every new action gets fresh arrow visualization
+                battleGraphics.clearActionArrows();
+                battleGraphics.addActionVisualization(data.actionDetails);
+            }
+            
             battleGraphics.updateGameState(data.gameState);
             
             // Update skip turn button after game state changes
@@ -282,8 +293,8 @@ async function initializeBattleGraphics(matchInfo) {
         
         // Create graphics instance
         battleGraphics = new P5BattleGraphicsMultiplayer(
-            matchInfo,
-            gameSocket,
+            matchInfo, 
+            gameSocket, 
             currentUser.userId,
             playerTeam
         );

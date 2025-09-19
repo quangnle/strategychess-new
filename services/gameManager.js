@@ -99,9 +99,19 @@ class GameInstance {
                         console.log(`❌ Unit with id ${actionData.unit.id} not found`);
                         return { success: false, error: 'Unit not found' };
                     }
+                    
+                    // Store old position for action tracking
+                    const oldPosition = { row: unitToMove.row, col: unitToMove.col };
+                    actionData.oldPosition = oldPosition;
+                    
                     console.log(`🚶 Moving unit ${unitToMove.name} from (${unitToMove.row},${unitToMove.col}) to (${actionData.row},${actionData.col})`);
                     result = this.gameLogic.makeMove(unitToMove, actionData.row, actionData.col);
                     console.log(`📍 Unit position after move: (${unitToMove.row},${unitToMove.col})`);
+                    
+                    // Store new position after move for action tracking
+                    if (result) {
+                        actionData.currentPosition = { row: unitToMove.row, col: unitToMove.col };
+                    }
                     
                     // Check if unit has any remaining actions after move
                     if (result && !this.hasAvailableActions(unitToMove)) {
@@ -204,11 +214,15 @@ class GameInstance {
                     this.endGame(gameEndResult);
                 }
                 
+                const actionDetails = this.buildActionDetails(action, actionData, result);
+                
                 return { 
                     success: true, 
                     result: result,
                     gameState: this.getGameState(),
-                    gameEnded: gameEndResult !== 0
+                    gameEnded: gameEndResult !== 0,
+                    action: action,
+                    actionDetails: actionDetails
                 };
             } else {
                 console.log(`❌ Action ${action} failed in game logic`);
@@ -250,6 +264,129 @@ class GameInstance {
             this.gameLogic.getSacrificeableTargets(unit).length > 0 : false;
             
         return canAttack || canHeal || canSacrifice;
+    }
+    
+    // Build action details for client visualization
+    buildActionDetails(action, actionData, result) {
+        if (!result) {
+            return null; // Only successful actions
+        }
+        
+        
+        switch(action) {
+            case 'move_unit':
+                const movedUnit = this.findUnitById(actionData.unit.id);
+                
+                // Use stored positions from actionData for accuracy
+                const fromPos = actionData.oldPosition;
+                const toPos = actionData.currentPosition || { row: actionData.row, col: actionData.col };
+                
+                const moveDetails = {
+                    type: 'move',
+                    unit: movedUnit,
+                    fromPosition: fromPos,
+                    toPosition: toPos
+                };
+                
+                
+                return moveDetails;
+                
+            case 'attack':
+                const attackingUnit = this.findUnitById(actionData.unit.id);
+                const attackTarget = this.findUnitById(actionData.target.id);
+                
+                if (!attackingUnit || !attackTarget) {
+                    console.warn('❌ Attack actionDetails: Missing unit data');
+                    return null;
+                }
+                
+                return {
+                    type: 'attack',
+                    attacker: attackingUnit,
+                    target: attackTarget
+                };
+                
+            case 'heal':
+                const healingUnit = this.findUnitById(actionData.unit.id);
+                const healTarget = this.findUnitById(actionData.target.id);
+                return {
+                    type: 'heal',
+                    healer: healingUnit,
+                    target: healTarget
+                };
+                
+            case 'sacrifice':
+                const sacrificingUnit = this.findUnitById(actionData.unit.id);
+                const sacrificeTarget = this.findUnitById(actionData.target.id);
+                return {
+                    type: 'sacrifice',
+                    sacrificer: sacrificingUnit,
+                    target: sacrificeTarget
+                };
+                
+            case 'suicide':
+                const suicideUnit = this.findUnitById(actionData.unit.id);
+                const affectedTargets = this.calculateSuicideTargets(suicideUnit);
+                return {
+                    type: 'suicide',
+                    unit: suicideUnit,
+                    suicidePosition: { row: suicideUnit.row, col: suicideUnit.col },
+                    affectedTargets: affectedTargets
+                };
+                
+            default:
+                console.warn('❌ Unknown action type for visualization:', action);
+                return null;
+        }
+    }
+    
+    // Calculate targets affected by suicide action
+    calculateSuicideTargets(unit) {
+        if (!unit || !this.gameLogic) return [];
+        
+        // Get 8 adjacent cells using game logic method
+        const adjacentCells = this.gameLogic._get8AdjacentCells ? 
+            this.gameLogic._get8AdjacentCells(unit.row, unit.col) :
+            this.get8AdjacentCells(unit.row, unit.col);
+        
+        // Find enemy units in those cells
+        const targets = adjacentCells
+            .map(cell => this.gameLogic._getUnitByPosition ? 
+                this.gameLogic._getUnitByPosition(cell.row, cell.col) :
+                this.getUnitAtPosition(cell.row, cell.col))
+            .filter(target => target && target.teamId !== unit.teamId);
+            
+        return targets;
+    }
+    
+    // Helper method to get 8 adjacent cells (if not available in gameLogic)
+    get8AdjacentCells(row, col) {
+        const directions = [
+            [-1, -1], [-1, 0], [-1, 1],
+            [0, -1],           [0, 1],
+            [1, -1],  [1, 0],  [1, 1]
+        ];
+        
+        return directions
+            .map(([deltaRow, deltaCol]) => ({
+                row: row + deltaRow,
+                col: col + deltaCol
+            }))
+            .filter(cell => 
+                cell.row >= 0 && cell.row < 12 && // BOARD_ROWS
+                cell.col >= 0 && cell.col < 11   // BOARD_COLS
+            );
+    }
+    
+    // Helper method to get unit at position (if not available in gameLogic)
+    getUnitAtPosition(row, col) {
+        const allUnits = [
+            ...this.gameLogic.matchInfo.team1.units,
+            ...this.gameLogic.matchInfo.team2.units
+        ];
+        return allUnits.find(unit => 
+            unit.row === row && unit.col === col && unit.hp > 0
+        );
     }
     
     // Lấy game state for client synchronization
