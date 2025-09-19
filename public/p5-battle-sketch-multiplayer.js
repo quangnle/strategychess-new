@@ -565,7 +565,7 @@ class P5BattleGraphicsMultiplayer {
         });
     }
 
-    drawArrow(from, to, color, style = 'solid', width = 3) {
+    drawArrow(from, to, color, style = 'solid', width = 5) {
         if (!from || !to) {
             console.warn('❌ drawArrow: Invalid from/to positions:', { from, to });
             return;
@@ -590,7 +590,7 @@ class P5BattleGraphicsMultiplayer {
         if (x1 === x2 && y1 === y2) return;
         
         // Set arrow style with transparency
-        this.p.stroke(color[0], color[1], color[2], 120); // 120/255 = ~47% opacity
+        this.p.stroke(color[0], color[1], color[2], 80); //
         this.p.strokeWeight(width);
         
         if (style === 'dashed') {
