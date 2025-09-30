@@ -209,10 +209,22 @@ function initializeGame(matchId) {
             // Process action visualization BEFORE updating game state
             // to avoid clearing arrows during turn change detection
             if (data.actionDetails && data.result) {
+                console.log('🎯 PLAY.JS: Received actionDetails:', {
+                    type: data.actionDetails.type,
+                    hasArrowData: !!data.actionDetails.arrowData,
+                    arrowCount: data.actionDetails.arrowData ? data.actionDetails.arrowData.length : 0,
+                    fullActionDetails: data.actionDetails
+                });
+                
                 // 🔧 CRITICAL FIX: Clear old arrows BEFORE adding new ones
                 // This ensures every new action gets fresh arrow visualization
                 battleGraphics.clearActionArrows();
                 battleGraphics.addActionVisualization(data.actionDetails);
+            } else {
+                console.warn('🎯 PLAY.JS: No actionDetails or result failed:', { 
+                    hasActionDetails: !!data.actionDetails, 
+                    result: data.result 
+                });
             }
             
             battleGraphics.updateGameState(data.gameState);

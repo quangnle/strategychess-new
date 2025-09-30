@@ -3,7 +3,7 @@ import GameLogic from '../core-logic/game-logic.js';
 
 // Mỗi game instance quản lý 1 trận đấu
 class GameInstance {
-    constructor(matchId, matchName, teamsData) {
+    constructor(matchId, matchName, teamsData, serverGameManagerRef = null) {
         this.matchId = matchId;
         this.matchName = matchName;
         this.status = 'active'; // active, paused, finished
@@ -11,6 +11,7 @@ class GameInstance {
         this.endedAt = null;
         this.winner = null;
         this.players = [];
+        this.serverGameManager = serverGameManagerRef; // 🔧 Store reference to access service
         
         // Tạo matchInfo từ teamsData
         const capitalizeFirst = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
@@ -81,13 +82,19 @@ class GameInstance {
             
             // Validate it's player's turn (for most actions)
             if (action !== 'end_turn' && this.gameLogic.currentTurnTeamId) {
-                // Map player to team - this needs to be implemented based on your team assignment logic
                 const playerTeam = this.getPlayerTeam(playerId);
                 if (playerTeam !== this.gameLogic.currentTurnTeamId) {
                     console.log(`❌ Not player ${playerId}'s turn. Current turn: ${this.gameLogic.currentTurnTeamId}, Player team: ${playerTeam}`);
                     return { success: false, error: 'Not your turn' };
                 }
             }
+            
+            // 🔧 PHASE 1: Capture pre-action snapshot for death analysis
+            const preActionSnapshot = this.captureUnitsSnapshot(action, actionData);
+            console.log(`🔧 PRE-ACTION SNAPSHOT for ${action}:`, {
+                count: preActionSnapshot.length,
+                units: preActionSnapshot.map(u => ({ id: u.id, hp: u.hp, alive: u.isAlive, pos: `(${u.position.row},${u.position.col})` }))
+            });
             
             // Process action through game logic
             let result;
@@ -204,6 +211,34 @@ class GameInstance {
                     return { success: false, error: 'Unknown action' };
             }
             
+            // 🔧 STEP 2: Enhanced analysis after action execution
+            let deathAnalysis = null;
+            if (result) {
+                const postActionSnapshot = this.captureUnitsSnapshotPostAction(action, actionData, preActionSnapshot);
+                console.log(`🔧 POST-ACTION SNAPSHOT for ${action}:`, {
+                    count: postActionSnapshot.length,
+                    units: postActionSnapshot.map(u => ({ id: u.id, hp: u.hp, alive: u.isAlive, pos: `(${u.position.row},${u.position.col})` }))
+                });
+                
+                if (action === 'suicide') {
+                    // Use comprehensive analysis for suicide
+                    const allUnitChanges = this.analyzeAllUnitChanges(preActionSnapshot, postActionSnapshot, action);
+                    console.log(`🔧 FINAL allUnitChanges:`, JSON.stringify(allUnitChanges, null, 2));
+                    actionData.allUnitChanges = allUnitChanges;
+                    // Keep deathAnalysis for compatibility
+                    deathAnalysis = {
+                        deaths: allUnitChanges.deaths,
+                        totalDeaths: allUnitChanges.totalDeaths,
+                        action: action
+                    };
+                } else {
+                    // Use standard death analysis for other actions
+                    deathAnalysis = this.analyzeDeaths(preActionSnapshot, postActionSnapshot, action);
+                }
+                
+                actionData.deathAnalysis = deathAnalysis;
+            }
+            
             if (result) {
                 console.log(`✅ Action ${action} processed successfully`);
                 
@@ -235,12 +270,33 @@ class GameInstance {
         }
     }
     
-    // Get player's team assignment
+    // 🔧 FIXED: Use same joinedAt logic as gameHandlers.js
     getPlayerTeam(playerId) {
-        // For now, simple assignment: first player = blue, second = red
-        // This should match the logic in gameHandlers.js
+        try {
+            // Access service through serverGameManager reference
+            if (this.serverGameManager && this.serverGameManager.service && this.serverGameManager.service.store) {
+                const players = this.serverGameManager.service.store.getMatchPlayers(this.matchId);
+                
+                if (players && players.length === 2) {
+                    // Use exact same logic as gameHandlers.determinePlayerTeam()
+                    const sortedPlayers = players.sort((a, b) => a.joinedAt - b.joinedAt);
+                    
+                    // Team assignment successful using joinedAt logic
+                    
+                    // First player by joinedAt gets blue, second gets red
+                    return playerId === sortedPlayers[0].userId ? 'blue' : 'red';
+                }
+            }
+        } catch (error) {
+            console.warn('🔧 Could not access store for team determination, using fallback:', error.message);
+        }
+        
+        // Fallback to array index if store access fails
         const playerIndex = this.players.indexOf(playerId);
-        return playerIndex === 0 ? 'blue' : 'red';
+        const fallbackTeam = playerIndex === 0 ? 'blue' : 'red';
+        
+        console.warn(`🔧 Using fallback team assignment: ${fallbackTeam}`);
+        return fallbackTeam;
     }
     
     // Find unit by ID in gameLogic.matchInfo
@@ -266,78 +322,231 @@ class GameInstance {
         return canAttack || canHeal || canSacrifice;
     }
     
-    // Build action details for client visualization
+    // 🔧 PHASE 2: Enhanced action details with death analysis
     buildActionDetails(action, actionData, result) {
         if (!result) {
             return null; // Only successful actions
         }
-        
-        
+
+        const baseDetails = {
+            type: action,
+            timestamp: Date.now(),
+            deaths: actionData.deathAnalysis?.deaths || []
+        };
+
         switch(action) {
             case 'move_unit':
-                const movedUnit = this.findUnitById(actionData.unit.id);
-                
-                // Use stored positions from actionData for accuracy
-                const fromPos = actionData.oldPosition;
-                const toPos = actionData.currentPosition || { row: actionData.row, col: actionData.col };
-                
-                const moveDetails = {
-                    type: 'move',
-                    unit: movedUnit,
-                    fromPosition: fromPos,
-                    toPosition: toPos
-                };
-                
-                
-                return moveDetails;
-                
+                return this.buildMoveDetails(actionData, baseDetails);
             case 'attack':
-                const attackingUnit = this.findUnitById(actionData.unit.id);
-                const attackTarget = this.findUnitById(actionData.target.id);
-                
-                if (!attackingUnit || !attackTarget) {
-                    console.warn('❌ Attack actionDetails: Missing unit data');
-                    return null;
-                }
-                
-                return {
-                    type: 'attack',
-                    attacker: attackingUnit,
-                    target: attackTarget
-                };
-                
-            case 'heal':
-                const healingUnit = this.findUnitById(actionData.unit.id);
-                const healTarget = this.findUnitById(actionData.target.id);
-                return {
-                    type: 'heal',
-                    healer: healingUnit,
-                    target: healTarget
-                };
-                
-            case 'sacrifice':
-                const sacrificingUnit = this.findUnitById(actionData.unit.id);
-                const sacrificeTarget = this.findUnitById(actionData.target.id);
-                return {
-                    type: 'sacrifice',
-                    sacrificer: sacrificingUnit,
-                    target: sacrificeTarget
-                };
-                
+                return this.buildAttackDetails(actionData, baseDetails);
             case 'suicide':
-                const suicideUnit = this.findUnitById(actionData.unit.id);
-                const affectedTargets = this.calculateSuicideTargets(suicideUnit);
-                return {
-                    type: 'suicide',
-                    unit: suicideUnit,
-                    suicidePosition: { row: suicideUnit.row, col: suicideUnit.col },
-                    affectedTargets: affectedTargets
-                };
-                
+                return this.buildSuicideDetails(actionData, baseDetails);
+            case 'sacrifice':
+                return this.buildSacrificeDetails(actionData, baseDetails);
+            case 'heal':
+                return this.buildHealDetails(actionData, baseDetails);
             default:
                 console.warn('❌ Unknown action type for visualization:', action);
                 return null;
         }
+    }
+
+    // Build move-specific details (no deaths expected)
+    buildMoveDetails(actionData, baseDetails) {
+        const movedUnit = this.findUnitById(actionData.unit.id);
+        const fromPos = actionData.oldPosition;
+        const toPos = actionData.currentPosition || { row: actionData.row, col: actionData.col };
+        
+        return {
+            ...baseDetails,
+            unit: this.getUnitSnapshot(movedUnit),
+            // ✅ Arrow data - always valid positions
+            arrowData: [{
+                from: fromPos,
+                to: toPos,
+                style: 'move'
+            }]
+        };
+    }
+
+    // Build attack-specific details with death handling
+    buildAttackDetails(actionData, baseDetails) {
+        const attacker = this.findUnitById(actionData.unit.id);
+        const targetDeath = baseDetails.deaths.find(d => d.unitId === actionData.target.id);
+        
+        return {
+            ...baseDetails,
+            unit: this.getUnitSnapshot(attacker),
+            target: {
+                id: actionData.target.id,
+                name: actionData.target.name,
+                wasDamaged: true,
+                wasKilled: !!targetDeath,
+                originalPosition: targetDeath ? targetDeath.originalPosition : null,
+                currentPosition: targetDeath ? targetDeath.currentPosition : null
+            },
+            // ✅ Arrow data - always valid positions
+            arrowData: [{
+                from: { row: attacker.row, col: attacker.col },
+                to: targetDeath ? targetDeath.originalPosition : { row: actionData.target.row, col: actionData.target.col },
+                style: targetDeath ? 'kill' : 'damage'
+            }]
+        };
+    }
+
+    // 🔧 STEP 3: Enhanced suicide details with comprehensive target info
+    buildSuicideDetails(actionData, baseDetails) {
+        const suicider = actionData.unit;
+        const allChanges = actionData.allUnitChanges; // Enhanced comprehensive data
+        
+        if (!allChanges) {
+            // Fallback to old behavior if no enhanced data
+            console.warn('⚠️ No allUnitChanges data, using fallback suicide details');
+            const suiciderDeath = baseDetails.deaths.find(d => d.unitId === suicider.id);
+            const victimDeaths = baseDetails.deaths.filter(d => d.unitId !== suicider.id);
+            
+            return {
+                ...baseDetails,
+                unit: this.getUnitSnapshot(suicider),
+                suiciderDied: !!suiciderDeath,
+                arrowData: victimDeaths.map(victim => ({
+                    from: { row: suicider.row, col: suicider.col },
+                    to: victim.originalPosition,
+                    style: 'suicide_kill'
+                }))
+            };
+        }
+        
+        // Enhanced suicide details with comprehensive target information
+        const suiciderDeath = allChanges.deaths.find(d => d.unitId === suicider.id);
+        const killedTargets = allChanges.deaths.filter(d => d.unitId !== suicider.id);
+        const damagedTargets = allChanges.damaged.filter(d => d.unitId !== suicider.id);
+        
+        console.log('💥 SUICIDE ANALYSIS:', {
+            suicider: suicider.name,
+            suicidePosition: { row: suicider.row, col: suicider.col },
+            killedTargets: killedTargets.length,
+            damagedTargets: damagedTargets.length,
+            unaffectedTargets: allChanges.unaffected.length
+        });
+
+        // Create arrow data
+        const arrowData = [
+            // Red arrows to killed targets
+            ...killedTargets.map(victim => ({
+                from: suiciderDeath ? suiciderDeath.originalPosition : { row: suicider.row, col: suicider.col },
+                to: victim.originalPosition,
+                style: 'suicide_kill',
+                targetType: 'killed',
+                targetName: victim.unitName
+            })),
+            
+            // Orange arrows to damaged targets
+            ...damagedTargets.map(victim => ({
+                from: suiciderDeath ? suiciderDeath.originalPosition : { row: suicider.row, col: suicider.col },
+                to: victim.originalPosition,
+                style: 'suicide_damage',
+                targetType: 'damaged',
+                targetName: victim.unitName,
+                damageDealt: victim.damageTaken
+            }))
+        ];
+
+        console.log('🏹 SUICIDE ARROWS DATA:', {
+            totalArrows: arrowData.length,
+            killedArrows: killedTargets.length,
+            damagedArrows: damagedTargets.length,
+            arrowDetails: arrowData.map(a => ({ 
+                from: `(${a.from.row},${a.from.col})`, 
+                to: `(${a.to.row},${a.to.col})`, 
+                style: a.style,
+                target: a.targetName 
+            }))
+        });
+        
+        return {
+            ...baseDetails,
+            unit: this.getUnitSnapshot(suicider),
+            suiciderDied: !!suiciderDeath,
+            
+            // ✅ Comprehensive target categorization
+            killedTargets: killedTargets.map(death => ({
+                id: death.unitId,
+                name: death.unitName,
+                originalPosition: death.originalPosition,
+                currentPosition: death.currentPosition,
+                teamId: death.teamId
+            })),
+            
+            damagedTargets: damagedTargets.map(damage => ({
+                id: damage.unitId,
+                name: damage.unitName,
+                position: damage.originalPosition,
+                hpBefore: damage.hpBefore,
+                hpAfter: damage.hpAfter,
+                damageTaken: damage.damageTaken,
+                teamId: damage.teamId
+            })),
+            
+            // ✅ Arrows for ALL affected targets (killed + damaged)
+            arrowData: arrowData,
+            
+            // ✅ Special effect positions for client rendering
+            effectPositions: {
+                explosionCenter: suiciderDeath ? suiciderDeath.originalPosition : { row: suicider.row, col: suicider.col },
+                deathMarkers: killedTargets.map(d => d.originalPosition)
+            }
+        };
+    }
+
+    // Build sacrifice-specific details with potential sacrificer death
+    buildSacrificeDetails(actionData, baseDetails) {
+        const sacrificer = this.findUnitById(actionData.unit.id);
+        const target = this.findUnitById(actionData.target.id);
+        const sacrificerDeath = baseDetails.deaths.find(d => d.unitId === actionData.unit.id);
+        
+        return {
+            ...baseDetails,
+            unit: this.getUnitSnapshot(actionData.unit),
+            target: this.getUnitSnapshot(target),
+            sacrificerDied: !!sacrificerDeath,
+            // ✅ Arrow from sacrificer's original position to target
+            arrowData: [{
+                from: sacrificerDeath ? sacrificerDeath.originalPosition : { row: sacrificer.row, col: sacrificer.col },
+                to: { row: target.row, col: target.col },
+                style: sacrificerDeath ? 'sacrifice_death' : 'sacrifice'
+            }]
+        };
+    }
+
+    // Build heal-specific details (no deaths expected)
+    buildHealDetails(actionData, baseDetails) {
+        const healer = this.findUnitById(actionData.unit.id);
+        const target = this.findUnitById(actionData.target.id);
+        
+        return {
+            ...baseDetails,
+            unit: this.getUnitSnapshot(healer),
+            target: this.getUnitSnapshot(target),
+            // ✅ Normal arrow - no death concerns
+            arrowData: [{
+                from: { row: healer.row, col: healer.col },
+                to: { row: target.row, col: target.col },
+                style: 'heal'
+            }]
+        };
+    }
+
+    // Helper: Get clean unit snapshot
+    getUnitSnapshot(unit) {
+        if (!unit) return null;
+        return {
+            id: unit.id,
+            name: unit.name,
+            hp: unit.hp,
+            position: { row: unit.row, col: unit.col },
+            teamId: unit.teamId
+        };
     }
     
     // Calculate targets affected by suicide action
@@ -427,14 +636,272 @@ class GameInstance {
         this.players = [];
         console.log(`Game instance ${this.matchId} cleaned up`);
     }
+
+    // 🔧 PHASE 1: Snapshot capture for death analysis
+    captureUnitsSnapshot(action, actionData) {
+        const relevantUnits = this.getRelevantUnits(action, actionData);
+        console.log(`🔧 CAPTURING SNAPSHOT for ${action}:`, {
+            relevantCount: relevantUnits.length,
+            relevantUnits: relevantUnits.map(u => ({ id: u.id, hp: u.hp, pos: `(${u.row},${u.col})` }))
+        });
+        
+        return relevantUnits.map(unit => ({
+            id: unit.id,
+            name: unit.name,
+            hp: unit.hp,
+            position: { row: unit.row, col: unit.col },
+            isAlive: unit.hp > 0,
+            teamId: unit.teamId
+        }));
+    }
+
+    // 🔧 PHASE 2: Post-action snapshot that handles dead units correctly
+    captureUnitsSnapshotPostAction(action, actionData, preActionSnapshot) {
+        if (action === 'suicide') {
+            console.log(`🔧 POST-ACTION SUICIDE SNAPSHOT using preAction unit list:`, {
+                preActionCount: preActionSnapshot.length,
+                preActionUnits: preActionSnapshot.map(u => ({ id: u.id, hp: u.hp, pos: `(${u.position.row},${u.position.col})` }))
+            });
+            
+            // For suicide, use pre-action unit IDs to ensure we capture all affected units
+            // even if suicide unit is now off-board
+            const postUnits = preActionSnapshot.map(preUnit => {
+                const currentUnit = this.findUnitById(preUnit.id);
+                if (!currentUnit) {
+                    console.warn(`⚠️ Unit ${preUnit.id} not found in current game state`);
+                    return null;
+                }
+                
+                const isOffBoard = currentUnit.row === null || currentUnit.col === null;
+                const resultUnit = {
+                    id: currentUnit.id,
+                    name: currentUnit.name,
+                    hp: currentUnit.hp,
+                    position: isOffBoard 
+                        ? preUnit.position // ✅ Use pre-action position for dead units
+                        : { row: currentUnit.row, col: currentUnit.col },
+                    isAlive: currentUnit.hp > 0,
+                    teamId: currentUnit.teamId
+                };
+                
+                console.log(`🔧 POST UNIT ${currentUnit.id}:`, {
+                    currentHP: currentUnit.hp,
+                    currentPos: `(${currentUnit.row},${currentUnit.col})`,
+                    isOffBoard: isOffBoard,
+                    usingPrePos: isOffBoard,
+                    finalPos: `(${resultUnit.position.row},${resultUnit.position.col})`
+                });
+                
+                return resultUnit;
+            }).filter(unit => unit !== null);
+            
+            console.log(`🔧 POST-ACTION SUICIDE RESULT:`, {
+                resultCount: postUnits.length,
+                resultUnits: postUnits.map(u => ({ id: u.id, hp: u.hp, alive: u.isAlive, pos: `(${u.position.row},${u.position.col})` }))
+            });
+            
+            return postUnits;
+        } else {
+            // For other actions, use normal snapshot
+            return this.captureUnitsSnapshot(action, actionData);
+        }
+    }
+
+    // Get units that could be affected by the action
+    getRelevantUnits(action, actionData) {
+        const allUnits = [
+            ...this.gameLogic.matchInfo.team1.units,
+            ...this.gameLogic.matchInfo.team2.units
+        ];
+
+        // console.log(`🔧 getRelevantUnits called for action: ${action}`);
+
+        switch (action) {
+            case 'attack':
+                // Attacker and target
+                return allUnits.filter(unit => 
+                    unit.id === actionData.unit.id || 
+                    unit.id === actionData.target.id
+                );
+            
+            case 'suicide':
+                // Suicide unit and all adjacent units
+                const suicideUnit = allUnits.find(u => u.id === actionData.unit.id);
+                if (!suicideUnit) return [];
+                
+                // ✅ Use existing public method instead of private gameLogic method
+                const adjacentCells = this.get8AdjacentCells(suicideUnit.row, suicideUnit.col);
+                const adjacentUnits = allUnits.filter(unit => 
+                    adjacentCells.some(cell => cell.row === unit.row && cell.col === unit.col)
+                );
+                
+                console.log(`🔧 SUICIDE getRelevantUnits DEBUG:`, {
+                    suicideUnit: { id: suicideUnit.id, pos: `(${suicideUnit.row},${suicideUnit.col})` },
+                    adjacentCellsCount: adjacentCells.length,
+                    adjacentUnitsCount: adjacentUnits.length,
+                    totalRelevant: 1 + adjacentUnits.length
+                });
+                
+                return [suicideUnit, ...adjacentUnits];
+            
+            case 'sacrifice':
+                // Sacrificer and target
+                return allUnits.filter(unit => 
+                    unit.id === actionData.unit.id || 
+                    unit.id === actionData.target.id
+                );
+            
+            case 'heal':
+                // Healer and target (heal doesn't cause death but included for consistency)
+                return allUnits.filter(unit => 
+                    unit.id === actionData.unit.id || 
+                    unit.id === actionData.target.id
+                );
+            
+            case 'move_unit':
+                // Just the moving unit (move doesn't cause death)
+                return allUnits.filter(unit => unit.id === actionData.unit.id);
+            
+            default:
+                return [];
+        }
+    }
+
+    // Analyze what units died between snapshots
+    analyzeDeaths(beforeSnapshot, afterSnapshot, action) {
+        const deaths = [];
+        
+        beforeSnapshot.forEach(beforeUnit => {
+            const afterUnit = afterSnapshot.find(u => u.id === beforeUnit.id);
+            
+            if (beforeUnit.isAlive && (!afterUnit || !afterUnit.isAlive)) {
+                deaths.push({
+                    unitId: beforeUnit.id,
+                    unitName: beforeUnit.name,
+                    teamId: beforeUnit.teamId,
+                    originalPosition: beforeUnit.position,
+                    currentPosition: afterUnit ? afterUnit.position : { row: -1, col: -1 },
+                    deathCause: this.determineDeathCause(beforeUnit.id, action),
+                    originalHP: beforeUnit.hp,
+                    currentHP: afterUnit ? afterUnit.hp : 0
+                });
+            }
+        });
+
+        return {
+            deaths,
+            totalDeaths: deaths.length,
+            action: action
+        };
+    }
+
+    // 🔧 STEP 1: Comprehensive unit change analysis for suicide
+    analyzeAllUnitChanges(beforeSnapshot, afterSnapshot, action) {
+        console.log(`🔧 ANALYZING ALL UNIT CHANGES for ${action}:`, {
+            beforeCount: beforeSnapshot.length,
+            afterCount: afterSnapshot.length,
+            beforeUnits: beforeSnapshot.map(u => ({ id: u.id, hp: u.hp, pos: `(${u.position.row},${u.position.col})` }))
+        });
+        
+        const changes = {
+            deaths: [],      // Units died (hp > 0 → hp = 0)  
+            damaged: [],     // Units damaged (hp decreased but alive)
+            unaffected: []   // Units in area but no change
+        };
+        
+        beforeSnapshot.forEach(beforeUnit => {
+            const afterUnit = afterSnapshot.find(u => u.id === beforeUnit.id);
+            
+            if (!afterUnit) {
+                // Unit missing in after snapshot (shouldn't happen but safety check)
+                console.log(`⚠️ Unit ${beforeUnit.id} missing in after snapshot`);
+                return;
+            }
+            
+            // console.log(`🔧 COMPARING UNIT ${beforeUnit.id}:`, {
+            //     before: { hp: beforeUnit.hp, alive: beforeUnit.isAlive },
+            //     after: { hp: afterUnit.hp, alive: afterUnit.isAlive },
+            //     hpChanged: beforeUnit.hp !== afterUnit.hp,
+            //     aliveChanged: beforeUnit.isAlive !== afterUnit.isAlive
+            // });
+            
+            if (beforeUnit.isAlive && !afterUnit.isAlive) {
+                // Unit died
+                console.log(`💀 DEATH: ${beforeUnit.id} died (${beforeUnit.hp} → ${afterUnit.hp})`);
+                changes.deaths.push({
+                    unitId: beforeUnit.id,
+                    unitName: beforeUnit.name,
+                    teamId: beforeUnit.teamId,
+                    originalPosition: beforeUnit.position,
+                    currentPosition: afterUnit.position,
+                    deathCause: this.determineDeathCause(beforeUnit.id, action),
+                    originalHP: beforeUnit.hp,
+                    currentHP: afterUnit.hp
+                });
+            } else if (beforeUnit.hp > afterUnit.hp) {
+                // Unit damaged but alive
+                console.log(`🩸 DAMAGE: ${beforeUnit.id} damaged (${beforeUnit.hp} → ${afterUnit.hp})`);
+                changes.damaged.push({
+                    unitId: beforeUnit.id,
+                    unitName: beforeUnit.name,
+                    teamId: beforeUnit.teamId,
+                    originalPosition: beforeUnit.position,
+                    currentPosition: afterUnit.position,
+                    hpBefore: beforeUnit.hp,
+                    hpAfter: afterUnit.hp,
+                    damageTaken: beforeUnit.hp - afterUnit.hp
+                });
+            } else {
+                // Unit unaffected (in range but no damage)
+                console.log(`✅ UNAFFECTED: ${beforeUnit.id} no change (${beforeUnit.hp} → ${afterUnit.hp})`);
+                changes.unaffected.push({
+                    unitId: beforeUnit.id,
+                    unitName: beforeUnit.name,
+                    teamId: beforeUnit.teamId,
+                    position: beforeUnit.position
+                });
+            }
+        });
+        
+        console.log(`🔧 ANALYZE RESULT:`, {
+            deaths: changes.deaths.length,
+            damaged: changes.damaged.length,
+            unaffected: changes.unaffected.length,
+            deathDetails: changes.deaths.map(d => ({ id: d.unitId, cause: d.deathCause })),
+            damageDetails: changes.damaged.map(d => ({ id: d.unitId, damage: d.damageTaken }))
+        });
+        
+        return {
+            ...changes,
+            totalDeaths: changes.deaths.length,
+            totalDamaged: changes.damaged.length,
+            totalUnaffected: changes.unaffected.length,
+            action: action
+        };
+    }
+
+    // Determine the cause of death for visualization
+    determineDeathCause(unitId, action) {
+        switch (action) {
+            case 'attack':
+                return 'killed_by_attack';
+            case 'suicide':
+                return 'killed_by_suicide';
+            case 'sacrifice':
+                return 'died_from_sacrifice';
+            default:
+                return 'unknown';
+        }
+    }
 }
 
 // Quản lý tất cả game instances
 class ServerGameManager {
-    constructor() {
+    constructor(service = null) {
         this.activeGames = new Map(); // Map<matchId, GameInstance>
         this.maxGames = 100; // Giới hạn số games
         this.cleanupInterval = null;
+        this.service = service; // 🔧 Store service reference for team assignment
         
         // Start cleanup interval
         this.startCleanupInterval();
@@ -458,7 +925,7 @@ class ServerGameManager {
             }
             
             // Create new game instance
-            const gameInstance = new GameInstance(matchId, matchName, teamsData);
+            const gameInstance = new GameInstance(matchId, matchName, teamsData, this);
             this.activeGames.set(matchId, gameInstance);
             
             console.log(`Created game instance for match ${matchId}. Total games: ${this.activeGames.size}`);

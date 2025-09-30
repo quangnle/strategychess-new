@@ -4,7 +4,7 @@ import ServerGameManager from '../../services/gameManager.js';
 class GameHandlers {
     constructor() {
         this.service = matchService;
-        this.gameManager = new ServerGameManager(); // Use centralized game manager
+        this.gameManager = new ServerGameManager(this.service); // 🔧 Pass service reference
     }
 
     // Handle user joining game

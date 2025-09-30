@@ -208,40 +208,158 @@ class P5BattleGraphicsMultiplayer {
             return;
         }
         
+        console.log('🎯 CLIENT: addActionVisualization called with:', {
+            type: actionDetails.type,
+            hasArrowData: !!actionDetails.arrowData,
+            arrowCount: actionDetails.arrowData ? actionDetails.arrowData.length : 0,
+            arrowData: actionDetails.arrowData,
+            fullDetails: actionDetails
+        });
+        
         const arrows = this.createActionArrow(actionDetails);
         
         if (arrows) {
             if (Array.isArray(arrows)) {
                 // Multiple arrows (e.g., suicide)
                 this.currentTurnActionArrows.push(...arrows);
+                console.log(`🏹 Added ${arrows.length} arrows to visualization`);
             } else {
                 // Single arrow
                 this.currentTurnActionArrows.push(arrows);
+                console.log('🏹 Added 1 arrow to visualization');
             }
         } else {
             console.warn('❌ createActionArrow returned null/undefined for:', actionDetails.type);
         }
     }
 
+    // 🔧 PHASE 3: Death-aware arrow creation using server arrowData
     createActionArrow(details) {
         if (!details) {
             console.warn('❌ createActionArrow: details is null/undefined');
             return null;
         }
-        
+
+        // Use new arrowData structure from server (with death handling)
+        if (details.arrowData && Array.isArray(details.arrowData)) {
+            console.log('🔧 Using server arrowData:', details.arrowData.length, 'arrows');
+            console.log('🔧 ArrowData details:', details.arrowData.map(a => ({ 
+                from: `(${a.from.row},${a.from.col})`, 
+                to: `(${a.to.row},${a.to.col})`, 
+                style: a.style 
+            })));
+            const arrows = details.arrowData.map(arrowData => this.createSingleArrow(arrowData, details));
+            console.log('🔧 Created arrows:', arrows.length);
+            return arrows;
+        }
+
+        // Fallback for old format (backward compatibility)
+        console.warn('⚠️ Using fallback arrow creation for:', details.type);
+        return this.createLegacyArrow(details);
+    }
+
+    // Create individual arrow with death-aware styling
+    createSingleArrow(arrowData, actionDetails) {
+        const baseArrow = {
+            from: arrowData.from,
+            to: arrowData.to,
+            metadata: {
+                actionType: actionDetails.type,
+                deaths: actionDetails.deaths || [],
+                style: arrowData.style,
+                timestamp: actionDetails.timestamp
+            }
+        };
+
+        // ✅ Style-specific customization based on death analysis
+        switch (arrowData.style) {
+            case 'move':
+                return { 
+                    ...baseArrow, 
+                    color: [0, 100, 255, 120], 
+                    style: 'solid', 
+                    width: 5 
+                };
+            
+            case 'damage':
+                return { 
+                    ...baseArrow, 
+                    color: [255, 99, 71, 120], 
+                    style: 'solid', 
+                    width: 5 
+                };
+            
+            case 'kill':
+                return { 
+                    ...baseArrow, 
+                    color: [255, 0, 0, 150], 
+                    style: 'solid', 
+                    width: 7 
+                };
+            
+            case 'suicide_kill':
+                return { 
+                    ...baseArrow, 
+                    color: [255, 0, 0, 150], 
+                    style: 'solid', 
+                    width: 7 
+                };
+            
+            case 'suicide_damage':
+                return { 
+                    ...baseArrow, 
+                    color: [255, 165, 0, 120], 
+                    style: 'solid', 
+                    width: 5 
+                };
+            
+            case 'sacrifice':
+                return { 
+                    ...baseArrow, 
+                    color: [148, 0, 211, 120], 
+                    style: 'solid', 
+                    width: 5 
+                };
+            
+            case 'sacrifice_death':
+                return { 
+                    ...baseArrow, 
+                    color: [75, 0, 130, 150], 
+                    style: 'dashed', 
+                    width: 6 
+                };
+            
+            case 'heal':
+                return { 
+                    ...baseArrow, 
+                    color: [0, 255, 0, 120], 
+                    style: 'solid', 
+                    width: 4 
+                };
+            
+            default:
+                console.warn('Unknown arrow style:', arrowData.style);
+                return { 
+                    ...baseArrow, 
+                    color: [128, 128, 128, 120], 
+                    style: 'solid', 
+                    width: 3 
+                };
+        }
+    }
+
+    // Legacy arrow creation for backward compatibility
+    createLegacyArrow(details) {
         switch(details.type) {
             case 'move':
-                const arrow = {
-                    type: 'move',
+                return {
                     from: details.fromPosition,
                     to: details.toPosition,
-                    color: [0, 100, 255], // Blue
+                    color: [0, 100, 255, 120],
                     style: 'solid',
-                    width: 3
+                    width: 5,
+                    metadata: { actionType: 'move', style: 'move' }
                 };
-                
-                
-                return arrow;
                 
             case 'attack':
                 if (!details.attacker || !details.target) {
@@ -250,51 +368,50 @@ class P5BattleGraphicsMultiplayer {
                 }
                 
                 return {
-                    type: 'attack',
                     from: { row: details.attacker.row, col: details.attacker.col },
                     to: { row: details.target.row, col: details.target.col },
-                    color: [255, 0, 0], // Red
+                    color: [255, 0, 0, 120],
                     style: 'solid',
-                    width: 3
+                    width: 5,
+                    metadata: { actionType: 'attack', style: 'damage' }
                 };
                 
             case 'heal':
                 return {
-                    type: 'heal',
                     from: { row: details.healer.row, col: details.healer.col },
                     to: { row: details.target.row, col: details.target.col },
-                    color: [0, 255, 0], // Green
+                    color: [0, 255, 0, 120],
                     style: 'solid',
-                    width: 3
+                    width: 4,
+                    metadata: { actionType: 'heal', style: 'heal' }
                 };
                 
             case 'sacrifice':
                 return {
-                    type: 'sacrifice',
                     from: { row: details.sacrificer.row, col: details.sacrificer.col },
                     to: { row: details.target.row, col: details.target.col },
-                    color: [128, 0, 128], // Purple
+                    color: [148, 0, 211, 120],
                     style: 'solid',
-                    width: 3
+                    width: 5,
+                    metadata: { actionType: 'sacrifice', style: 'sacrifice' }
                 };
                 
             case 'suicide':
-                // Create multiple arrows for each affected target
                 if (!details.affectedTargets || details.affectedTargets.length === 0) {
                     return null;
                 }
                 
                 return details.affectedTargets.map(target => ({
-                    type: 'suicide',
                     from: details.suicidePosition,
                     to: { row: target.row, col: target.col },
-                    color: [255, 0, 0], // Red
+                    color: [139, 0, 0, 120],
                     style: 'dashed',
-                    width: 2
+                    width: 6,
+                    metadata: { actionType: 'suicide', style: 'suicide_kill' }
                 }));
                 
             default:
-                console.warn('Unknown action type for visualization:', details.type);
+                console.warn('Unknown legacy action type:', details.type);
                 return null;
         }
     }
@@ -559,10 +676,58 @@ class P5BattleGraphicsMultiplayer {
         });
     }
 
+    // 🔧 STEP 5: Enhanced action arrows with suicide explosion center
     drawActionArrows() {
+        // Track suicide explosion centers to avoid duplicate drawing
+        const explosionCenters = new Set();
+        
         this.currentTurnActionArrows.forEach((arrow, index) => {
+            // ✅ Draw basic arrow
             this.drawArrow(arrow.from, arrow.to, arrow.color, arrow.style, arrow.width);
+            
+            // ✅ Add death effects if applicable
+            if (arrow.metadata && this.shouldShowDeathEffect(arrow.metadata.style)) {
+                this.drawDeathEffect(arrow.to);
+            }
+            
+            // ✅ Draw explosion center for suicide actions
+            if (arrow.metadata && arrow.metadata.actionType === 'suicide') {
+                const centerKey = `${arrow.from.row},${arrow.from.col}`;
+                if (!explosionCenters.has(centerKey)) {
+                    explosionCenters.add(centerKey);
+                    this.drawExplosionCenter(arrow.from);
+                }
+            }
         });
+    }
+
+    // Draw explosion center at suicide position
+    drawExplosionCenter(position) {
+        const centerX = this.offsetX + position.col * this.cellSize + this.cellSize / 2;
+        const centerY = this.offsetY + position.row * this.cellSize + this.cellSize / 2;
+        
+        // ✅ Explosion icon at suicide center
+        this.p.textAlign(this.p.CENTER, this.p.CENTER);
+        this.p.textSize(24); // Larger than death effects
+        this.p.fill(255, 150, 0, 240); // Bright orange explosion
+        this.p.text('💥', centerX, centerY);
+    }
+
+    // Determine if arrow style represents a death
+    shouldShowDeathEffect(style) {
+        return ['kill', 'suicide_kill', 'sacrifice_death'].includes(style);
+    }
+
+    // 🔧 STEP 5: Enhanced death effects for suicide with explosion center
+    drawDeathEffect(position) {
+        const centerX = this.offsetX + position.col * this.cellSize + this.cellSize / 2;
+        const centerY = this.offsetY + position.row * this.cellSize + this.cellSize / 2;
+        
+        // ✅ Set text properties
+        this.p.textAlign(this.p.CENTER, this.p.CENTER);
+        this.p.textSize(20);        
+        this.p.fill(255, 255, 255, 220);
+        this.p.text('☠️', centerX, centerY +5); // Skull for kill
     }
 
     drawArrow(from, to, color, style = 'solid', width = 5) {
@@ -691,7 +856,7 @@ class P5BattleGraphicsMultiplayer {
         this.drawHPBar(unit, x, y, unitColor);
             
         // Effect indicators
-            this.drawEffectIndicators(unit, x, y);
+        this.drawEffectIndicators(unit, x, y);
     }
     
     drawHPBar(unit, x, y, unitColor) {
@@ -741,6 +906,10 @@ class P5BattleGraphicsMultiplayer {
                     break;
                 case 'dash':
                     this.p.text('💨', iconX, iconY);
+                    break;
+                case 'SUICIDE':
+                case 'suicide':
+                    this.p.text('💣', iconX, iconY);
                     break;
                 default:
                     this.p.text('●', iconX, iconY);

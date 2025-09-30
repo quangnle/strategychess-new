@@ -32,6 +32,12 @@ class GameLogic {
 
         // thực hiện effect Berserk
         this._berserkEffect();
+
+        // thực hiện effect Adjacent Penalty
+        this._adjacentPenaltyEffect();
+
+        // bật effect suicide cho các unit có ability SUICIDE
+        this._suicideEffect();  
         
         // đưa unit đang turn vào danh sách đã end turn
         if (this.currentTurnUnit) {
@@ -173,6 +179,7 @@ class GameLogic {
         unit.row = row;
         unit.col = col;
 
+        /*
         // khi di chuyển vào ô mới mà xung quanh các ô này có enemy bị ADJACENT_PENALTY thì apply effect này lên các unit đó
         this._applyAdjacentPenalty(unit);
 
@@ -182,6 +189,10 @@ class GameLogic {
         if (isAdjacentByEnemy && unit.abilities.includes(ADJACENT_PENALTY)) {
             unit.effects.push({ name: ADJACENT_PENALTY });
         }
+        */
+
+        // update lại trạng thái effect ADJACENT_PENALTY
+        this._adjacentPenaltyEffect();
 
         // Lưu lại currentTurnUnit khi unit được phép di chuyển
         this.currentTurnUnit = unit;
@@ -235,6 +246,12 @@ class GameLogic {
             this._normalAttack(unit, target);
         }
 
+        // update lại trạng thái effect SUICIDE
+        this._suicideEffect();
+
+        // update lại trạng thái effect ADJACENT_PENALTY
+        this._adjacentPenaltyEffect();
+
         // update turn actions
         this.currentTurnActions.hasAttacked = true;
         return true;
@@ -278,6 +295,9 @@ class GameLogic {
 
         // update unit hp
         target.hp += 1;
+
+        // update lại trạng thái effect SUICIDE
+        this._suicideEffect();
         
         // update turn actions
         this.currentTurnActions.hasHealed = true;
@@ -330,6 +350,12 @@ class GameLogic {
         unit.hp -= 1;
         target.hp += 1;
         
+        // update lại trạng thái effect ADJACENT_PENALTY
+        this._adjacentPenaltyEffect();
+        
+        // update lại trạng thái effect SUICIDE
+        this._suicideEffect();
+        
         // update turn actions
         this.currentTurnActions.hasSacrificed = true;
         return true;
@@ -377,7 +403,10 @@ class GameLogic {
         // tìm tất cả các unit đứng trong 8 ô xung quanh unit
         const adjacentUnits = adjacentCells.map(cell => this._getUnitByPosition(cell.row, cell.col)).filter(u => u && u.hp > 0);
         // giảm hp của tất cả các unit trong 8 ô xung quanh unit
-        adjacentUnits.forEach(u => u.hp -= 1);        
+        adjacentUnits.forEach(u => u.hp -= 1);   
+        
+        // update lại trạng thái effect ADJACENT_PENALTY
+        this._adjacentPenaltyEffect();
         
         // update turn actions
         this.currentTurnActions.hasSuicided = true;
@@ -659,13 +688,41 @@ class GameLogic {
         // giảm trừ duration của các effect có duration
         allUnits.forEach(u => {
             if (u.effects && u.effects.length > 0) {
-                // loại bỏ effect có duration bằng 0
-                u.effects = u.effects.filter(e => e.duration > 0);
-                // giảm trừ duration của tất cả các effect
+                // ✅ FIX: Giữ lại permanent effects (no duration) và temporary effects (duration > 0)
+                // Chỉ loại bỏ expired effects (duration = 0)
+                u.effects = u.effects.filter(e => e.duration === undefined || e.duration > 0);
+                
+                // ✅ FIX: Chỉ giảm duration cho effects có duration property
                 u.effects.forEach(e => {
-                    // giảm trừ duration của effect
-                    e.duration -= 1;
+                    if (e.duration !== undefined) {
+                        e.duration -= 1;
+                    }
                 });
+            }
+        });
+    }
+
+    _suicideEffect() {
+        const allUnits = this._getAllUnits();
+        // tìm tất cả các unit có ability SUICIDE và hp = 1 và không có effect SUICIDE  
+        const suicideUnits = allUnits.filter(u => u.abilities.includes(SUICIDE) && u.hp === 1 && !u.effects.find(e => e.name === SUICIDE));
+        // thêm effect SUICIDE cho các unit đó
+        suicideUnits.forEach(u => {
+            u.effects.push({ name: SUICIDE });
+        });
+    }
+
+     _adjacentPenaltyEffect() {
+        const allUnits = this._getAllUnits();
+        allUnits.forEach(u => {
+            if (u.abilities.includes(ADJACENT_PENALTY)) {
+                // kiểm tra xem 4 ô chung quanh của unit có enemy không
+                const adjacentCells = this._get4AdjacentCells(u.row, u.col);
+                const adjacentEnemies = adjacentCells.map(cell => this._getUnitByPosition(cell.row, cell.col)).filter(e => e && e.teamId !== u.teamId && e.hp > 0);
+                // nếu có và unit đó không có effect ADJACENT_PENALTY thì thêm effect ADJACENT_PENALTY lên unit đó
+                if (adjacentEnemies.length > 0 && !u.effects.find(e => e.name === ADJACENT_PENALTY)) {
+                    u.effects.push({ name: ADJACENT_PENALTY });
+                }
             }
         });
     }
