@@ -14,13 +14,6 @@ class P5BattleGraphicsMultiplayer {
         // Perspective settings - always show player team at bottom
         this.isPlayerBlue = (playerTeam === 'blue');
         
-        // TEMPORARY DEBUG
-        console.log(`🐛 DEBUG BattleGraphics Init:`, {
-            playerTeam: this.playerTeam,
-            isPlayerBlue: this.isPlayerBlue,
-            currentUserId: this.currentUserId
-        });
-        
         // UI state
         this.selectedUnit = null;
         this.highlightedCells = [];
@@ -102,11 +95,6 @@ class P5BattleGraphicsMultiplayer {
 
     // Update game state from server
     updateGameState(gameState) {
-        console.log(`🐛 DEBUG updateGameState called:`, {
-            hasGameState: !!gameState,
-            hasGameBoard: !!gameState?.gameBoard,
-            playerTeam: this.playerTeam
-        });
         
         // Store server game state for movement points
         this.serverGameState = gameState;
@@ -152,7 +140,7 @@ class P5BattleGraphicsMultiplayer {
                     (this.selectedUnit && this.selectedUnit.hp <= 0);
                 
                 if (shouldClearSelection) {
-                    this.selectedUnit = null;
+            this.selectedUnit = null;
                     this.highlightedCells = [];
                     // Clear UI info
                     if (window.updateSelectedUnitInfo) window.updateSelectedUnitInfo(null);
@@ -208,25 +196,15 @@ class P5BattleGraphicsMultiplayer {
             return;
         }
         
-        console.log('🎯 CLIENT: addActionVisualization called with:', {
-            type: actionDetails.type,
-            hasArrowData: !!actionDetails.arrowData,
-            arrowCount: actionDetails.arrowData ? actionDetails.arrowData.length : 0,
-            arrowData: actionDetails.arrowData,
-            fullDetails: actionDetails
-        });
-        
         const arrows = this.createActionArrow(actionDetails);
         
         if (arrows) {
             if (Array.isArray(arrows)) {
                 // Multiple arrows (e.g., suicide)
                 this.currentTurnActionArrows.push(...arrows);
-                console.log(`🏹 Added ${arrows.length} arrows to visualization`);
             } else {
                 // Single arrow
                 this.currentTurnActionArrows.push(arrows);
-                console.log('🏹 Added 1 arrow to visualization');
             }
         } else {
             console.warn('❌ createActionArrow returned null/undefined for:', actionDetails.type);
@@ -242,14 +220,7 @@ class P5BattleGraphicsMultiplayer {
 
         // Use new arrowData structure from server (with death handling)
         if (details.arrowData && Array.isArray(details.arrowData)) {
-            console.log('🔧 Using server arrowData:', details.arrowData.length, 'arrows');
-            console.log('🔧 ArrowData details:', details.arrowData.map(a => ({ 
-                from: `(${a.from.row},${a.from.col})`, 
-                to: `(${a.to.row},${a.to.col})`, 
-                style: a.style 
-            })));
             const arrows = details.arrowData.map(arrowData => this.createSingleArrow(arrowData, details));
-            console.log('🔧 Created arrows:', arrows.length);
             return arrows;
         }
 
@@ -260,6 +231,7 @@ class P5BattleGraphicsMultiplayer {
 
     // Create individual arrow with death-aware styling
     createSingleArrow(arrowData, actionDetails) {
+        // ✅ FIXED: Use raw server coordinates - getBoardPosition() handles perspective transformation
         const baseArrow = {
             from: arrowData.from,
             to: arrowData.to,
@@ -703,8 +675,10 @@ class P5BattleGraphicsMultiplayer {
 
     // Draw explosion center at suicide position
     drawExplosionCenter(position) {
-        const centerX = this.offsetX + position.col * this.cellSize + this.cellSize / 2;
-        const centerY = this.offsetY + position.row * this.cellSize + this.cellSize / 2;
+        // ✅ PERSPECTIVE FIX: Use getBoardPosition for correct perspective transformation
+        const { x, y } = this.getBoardPosition(position.row, position.col);
+        const centerX = x + this.cellSize / 2;
+        const centerY = y + this.cellSize / 2;
         
         // ✅ Explosion icon at suicide center
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
@@ -720,14 +694,16 @@ class P5BattleGraphicsMultiplayer {
 
     // 🔧 STEP 5: Enhanced death effects for suicide with explosion center
     drawDeathEffect(position) {
-        const centerX = this.offsetX + position.col * this.cellSize + this.cellSize / 2;
-        const centerY = this.offsetY + position.row * this.cellSize + this.cellSize / 2;
+        // ✅ PERSPECTIVE FIX: Use getBoardPosition for correct perspective transformation
+        const { x, y } = this.getBoardPosition(position.row, position.col);
+        const centerX = x + this.cellSize / 2;
+        const centerY = y + this.cellSize / 2;
         
         // ✅ Set text properties
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
         this.p.textSize(20);        
         this.p.fill(255, 255, 255, 220);
-        this.p.text('☠️', centerX, centerY +5); // Skull for kill
+        this.p.text('☠️', centerX, centerY + 5); // Skull for kill
     }
 
     drawArrow(from, to, color, style = 'solid', width = 5) {
@@ -761,7 +737,7 @@ class P5BattleGraphicsMultiplayer {
         if (style === 'dashed') {
             // Draw dashed line
             this.drawDashedLine(x1, y1, x2, y2, 10, 5);
-        } else {
+            } else {
             // Draw solid line
             this.p.line(x1, y1, x2, y2);
         }
@@ -856,7 +832,7 @@ class P5BattleGraphicsMultiplayer {
         this.drawHPBar(unit, x, y, unitColor);
             
         // Effect indicators
-        this.drawEffectIndicators(unit, x, y);
+            this.drawEffectIndicators(unit, x, y);
     }
     
     drawHPBar(unit, x, y, unitColor) {
@@ -925,24 +901,18 @@ class P5BattleGraphicsMultiplayer {
 
     // Event handlers
     handleCanvasClick(mouseX, mouseY) {
-        console.log('🖱️ Canvas clicked at:', mouseX, mouseY);
-        console.log('🔍 Current state:', {
-            gameLogic: !!this.gameLogic,
-            currentTurnTeamId: this.gameLogic?.currentTurnTeamId,
-            playerTeam: this.playerTeam,
-            selectedUnit: this.selectedUnit?.name || 'none'
-        });
+        
         
         // Check if it's our turn
         if (!this.gameLogic || this.gameLogic.currentTurnTeamId !== this.playerTeam) {
-            console.log('❌ Not your turn - currentTurn:', this.gameLogic?.currentTurnTeamId, 'playerTeam:', this.playerTeam);
+            //console.log('❌ Not your turn - currentTurn:', this.gameLogic?.currentTurnTeamId, 'playerTeam:', this.playerTeam);
             return;
         }
         
         // Check if click is within board
         if (mouseX < this.offsetX || mouseX > this.offsetX + this.boardWidth ||
             mouseY < this.offsetY || mouseY > this.offsetY + this.boardHeight) {
-            console.log('❌ Click outside board bounds');
+            // console.log('❌ Click outside board bounds');
             return;
         }
         
@@ -950,37 +920,37 @@ class P5BattleGraphicsMultiplayer {
         const { row, col } = this.getLogicalPosition(mouseX, mouseY);
         
         if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= BOARD_COLS) {
-            console.log('❌ Invalid board coordinates:', row, col);
+            // console.log('❌ Invalid board coordinates:', row, col);
             return;
         }
 
-        console.log(`🎯 Clicked on valid board position: (${row}, ${col})`);
+        // console.log(`🎯 Clicked on valid board position: (${row}, ${col})`);
         
         // Find unit at clicked position
         const clickedUnit = this.getUnitAtPosition(row, col);
-        console.log('🔍 Unit at position:', clickedUnit?.name || 'none');
+        // console.log('🔍 Unit at position:', clickedUnit?.name || 'none');
 
         if (!this.selectedUnit) {
             // Try to select a unit
             if (clickedUnit && this.canSelectUnit(clickedUnit)) {
-                console.log('✅ Selecting unit:', clickedUnit.name);
+                // console.log('✅ Selecting unit:', clickedUnit.name);
                 this.selectUnit(clickedUnit);
             } else {
                 console.log('❌ Cannot select unit at this position');
                 if (clickedUnit) {
-                    console.log('🐛 DEBUG canSelectUnit failed for unit:', {
-                        name: clickedUnit.name,
-                        teamId: clickedUnit.teamId,
-                        playerTeam: this.playerTeam,
-                        hasGameLogic: !!this.gameLogic,
-                        currentTurnTeamId: this.gameLogic?.currentTurnTeamId,
-                        alreadyEndedTurnUnits: this.gameLogic?.alreadyEndedTurnUnits?.length || 0
-                    });
+                    //console.log('🐛 DEBUG canSelectUnit failed for unit:', {
+                    //    name: clickedUnit.name,
+                    //    teamId: clickedUnit.teamId,
+                    //    playerTeam: this.playerTeam,
+                    //    hasGameLogic: !!this.gameLogic,
+                    //    currentTurnTeamId: this.gameLogic?.currentTurnTeamId,
+                    //    alreadyEndedTurnUnits: this.gameLogic?.alreadyEndedTurnUnits?.length || 0
+                    //});
                 }
             }
         } else {
         // Handle action with selected unit
-            console.log('🎮 Handling action with selected unit:', this.selectedUnit.name);
+            // console.log('🎮 Handling action with selected unit:', this.selectedUnit.name);
             this.handleActionClick(row, col, clickedUnit);
         }
     }
@@ -1017,6 +987,7 @@ class P5BattleGraphicsMultiplayer {
             y: this.offsetY + displayRow * this.cellSize
         };
     }
+
 
     getLogicalPosition(screenX, screenY) {
         // Convert screen coordinates to logical board position
@@ -1071,7 +1042,7 @@ class P5BattleGraphicsMultiplayer {
     }
 
     selectUnit(unit) {
-        console.log(`✅ Selected unit: ${unit.name}`);
+        // console.log(`✅ Selected unit: ${unit.name}`);
         this.selectedUnit = unit;
         this.updateHighlights();
         
@@ -1205,13 +1176,13 @@ class P5BattleGraphicsMultiplayer {
     handleActionClick(row, col, clickedUnit) {
         const selectedUnit = this.selectedUnit;
         
-        console.log(`🎯 Action click at (${row}, ${col}), clickedUnit:`, clickedUnit?.name || 'none');
+        // console.log(`🎯 Action click at (${row}, ${col}), clickedUnit:`, clickedUnit?.name || 'none');
         
         if (clickedUnit) {
             // Clicked on a unit - determine action type
             if (clickedUnit.id === selectedUnit.id) {
                 // Clicked on same unit - try suicide
-                console.log('🔥 Attempting suicide action');
+                // console.log('🔥 Attempting suicide action');
                 this.sendAction('suicide', { unit: selectedUnit });
                 return;
             }
@@ -1222,19 +1193,19 @@ class P5BattleGraphicsMultiplayer {
             const isSacrificeTarget = this.isUnitInHighlights(clickedUnit, 'sacrifice');
             
             if (isAttackTarget) {
-                console.log('⚔️ Attacking target:', clickedUnit.name);
+                // console.log('⚔️ Attacking target:', clickedUnit.name);
                 this.sendAction('attack', { 
                     unit: selectedUnit, 
                     target: clickedUnit 
                 });
             } else if (isHealTarget) {
-                console.log('💚 Healing target:', clickedUnit.name);
+                // console.log('💚 Healing target:', clickedUnit.name);
                 this.sendAction('heal', { 
                     unit: selectedUnit, 
                     target: clickedUnit 
                 });
             } else if (isSacrificeTarget) {
-                console.log('🩸 Sacrificing for target:', clickedUnit.name);
+                // console.log('🩸 Sacrificing for target:', clickedUnit.name);
                 this.sendAction('sacrifice', { 
                     unit: selectedUnit, 
                     target: clickedUnit 
@@ -1242,10 +1213,10 @@ class P5BattleGraphicsMultiplayer {
             } else {
                 // Not a valid target, try to select this unit instead
                 if (this.canSelectUnit(clickedUnit)) {
-                    console.log('🎯 Selecting new unit:', clickedUnit.name);
+                    // console.log('🎯 Selecting new unit:', clickedUnit.name);
                     this.selectUnit(clickedUnit);
                 } else {
-                    console.log('❌ Invalid target and cannot select unit');
+                    // console.log('❌ Invalid target and cannot select unit');
                 }
             }
         } else {
@@ -1253,14 +1224,14 @@ class P5BattleGraphicsMultiplayer {
             const isMoveableCell = this.isCellInHighlights(row, col, 'move');
             
             if (isMoveableCell) {
-                console.log('🚶 Moving to:', row, col);
+                // console.log('🚶 Moving to:', row, col);
                 this.sendAction('move_unit', { 
                     unit: selectedUnit, 
                     row: row, 
                     col: col 
                 });
         } else {
-                console.log('❌ Not a moveable cell');
+                // console.log('❌ Not a moveable cell');
                 // Clear selection if clicked on invalid cell
                 this.clearSelection();
             }
@@ -1286,19 +1257,19 @@ class P5BattleGraphicsMultiplayer {
     }
 
     sendAction(action, actionData) {
-        console.log(`📤 Sending action: ${action}`, actionData);
+        // console.log(`📤 Sending action: ${action}`, actionData);
         
         if (window.sendGameAction) {
             window.sendGameAction(action, actionData);
         } else {
-            console.error('❌ sendGameAction not available');
+            // console.error('❌ sendGameAction not available');
         }
         
         // Don't clear selection immediately - wait for server response
         // Selection will be cleared when:
         // 1. Server updates game state and unit is in alreadyEndedTurnUnits
         // 2. Or when it's not our turn anymore
-        console.log('⏳ Action sent, waiting for server response...');
+        // console.log('⏳ Action sent, waiting for server response...');
     }
 }
 

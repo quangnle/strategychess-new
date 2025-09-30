@@ -91,10 +91,6 @@ class GameInstance {
             
             // 🔧 PHASE 1: Capture pre-action snapshot for death analysis
             const preActionSnapshot = this.captureUnitsSnapshot(action, actionData);
-            console.log(`🔧 PRE-ACTION SNAPSHOT for ${action}:`, {
-                count: preActionSnapshot.length,
-                units: preActionSnapshot.map(u => ({ id: u.id, hp: u.hp, alive: u.isAlive, pos: `(${u.position.row},${u.position.col})` }))
-            });
             
             // Process action through game logic
             let result;
@@ -215,15 +211,10 @@ class GameInstance {
             let deathAnalysis = null;
             if (result) {
                 const postActionSnapshot = this.captureUnitsSnapshotPostAction(action, actionData, preActionSnapshot);
-                console.log(`🔧 POST-ACTION SNAPSHOT for ${action}:`, {
-                    count: postActionSnapshot.length,
-                    units: postActionSnapshot.map(u => ({ id: u.id, hp: u.hp, alive: u.isAlive, pos: `(${u.position.row},${u.position.col})` }))
-                });
                 
                 if (action === 'suicide') {
                     // Use comprehensive analysis for suicide
                     const allUnitChanges = this.analyzeAllUnitChanges(preActionSnapshot, postActionSnapshot, action);
-                    console.log(`🔧 FINAL allUnitChanges:`, JSON.stringify(allUnitChanges, null, 2));
                     actionData.allUnitChanges = allUnitChanges;
                     // Keep deathAnalysis for compatibility
                     deathAnalysis = {
@@ -421,14 +412,6 @@ class GameInstance {
         const suiciderDeath = allChanges.deaths.find(d => d.unitId === suicider.id);
         const killedTargets = allChanges.deaths.filter(d => d.unitId !== suicider.id);
         const damagedTargets = allChanges.damaged.filter(d => d.unitId !== suicider.id);
-        
-        console.log('💥 SUICIDE ANALYSIS:', {
-            suicider: suicider.name,
-            suicidePosition: { row: suicider.row, col: suicider.col },
-            killedTargets: killedTargets.length,
-            damagedTargets: damagedTargets.length,
-            unaffectedTargets: allChanges.unaffected.length
-        });
 
         // Create arrow data
         const arrowData = [
@@ -451,18 +434,6 @@ class GameInstance {
                 damageDealt: victim.damageTaken
             }))
         ];
-
-        console.log('🏹 SUICIDE ARROWS DATA:', {
-            totalArrows: arrowData.length,
-            killedArrows: killedTargets.length,
-            damagedArrows: damagedTargets.length,
-            arrowDetails: arrowData.map(a => ({ 
-                from: `(${a.from.row},${a.from.col})`, 
-                to: `(${a.to.row},${a.to.col})`, 
-                style: a.style,
-                target: a.targetName 
-            }))
-        });
         
         return {
             ...baseDetails,
@@ -640,10 +611,6 @@ class GameInstance {
     // 🔧 PHASE 1: Snapshot capture for death analysis
     captureUnitsSnapshot(action, actionData) {
         const relevantUnits = this.getRelevantUnits(action, actionData);
-        console.log(`🔧 CAPTURING SNAPSHOT for ${action}:`, {
-            relevantCount: relevantUnits.length,
-            relevantUnits: relevantUnits.map(u => ({ id: u.id, hp: u.hp, pos: `(${u.row},${u.col})` }))
-        });
         
         return relevantUnits.map(unit => ({
             id: unit.id,
@@ -658,11 +625,6 @@ class GameInstance {
     // 🔧 PHASE 2: Post-action snapshot that handles dead units correctly
     captureUnitsSnapshotPostAction(action, actionData, preActionSnapshot) {
         if (action === 'suicide') {
-            console.log(`🔧 POST-ACTION SUICIDE SNAPSHOT using preAction unit list:`, {
-                preActionCount: preActionSnapshot.length,
-                preActionUnits: preActionSnapshot.map(u => ({ id: u.id, hp: u.hp, pos: `(${u.position.row},${u.position.col})` }))
-            });
-            
             // For suicide, use pre-action unit IDs to ensure we capture all affected units
             // even if suicide unit is now off-board
             const postUnits = preActionSnapshot.map(preUnit => {
@@ -684,21 +646,8 @@ class GameInstance {
                     teamId: currentUnit.teamId
                 };
                 
-                console.log(`🔧 POST UNIT ${currentUnit.id}:`, {
-                    currentHP: currentUnit.hp,
-                    currentPos: `(${currentUnit.row},${currentUnit.col})`,
-                    isOffBoard: isOffBoard,
-                    usingPrePos: isOffBoard,
-                    finalPos: `(${resultUnit.position.row},${resultUnit.position.col})`
-                });
-                
                 return resultUnit;
             }).filter(unit => unit !== null);
-            
-            console.log(`🔧 POST-ACTION SUICIDE RESULT:`, {
-                resultCount: postUnits.length,
-                resultUnits: postUnits.map(u => ({ id: u.id, hp: u.hp, alive: u.isAlive, pos: `(${u.position.row},${u.position.col})` }))
-            });
             
             return postUnits;
         } else {
@@ -713,8 +662,6 @@ class GameInstance {
             ...this.gameLogic.matchInfo.team1.units,
             ...this.gameLogic.matchInfo.team2.units
         ];
-
-        // console.log(`🔧 getRelevantUnits called for action: ${action}`);
 
         switch (action) {
             case 'attack':
@@ -734,13 +681,6 @@ class GameInstance {
                 const adjacentUnits = allUnits.filter(unit => 
                     adjacentCells.some(cell => cell.row === unit.row && cell.col === unit.col)
                 );
-                
-                console.log(`🔧 SUICIDE getRelevantUnits DEBUG:`, {
-                    suicideUnit: { id: suicideUnit.id, pos: `(${suicideUnit.row},${suicideUnit.col})` },
-                    adjacentCellsCount: adjacentCells.length,
-                    adjacentUnitsCount: adjacentUnits.length,
-                    totalRelevant: 1 + adjacentUnits.length
-                });
                 
                 return [suicideUnit, ...adjacentUnits];
             
@@ -797,12 +737,6 @@ class GameInstance {
 
     // 🔧 STEP 1: Comprehensive unit change analysis for suicide
     analyzeAllUnitChanges(beforeSnapshot, afterSnapshot, action) {
-        console.log(`🔧 ANALYZING ALL UNIT CHANGES for ${action}:`, {
-            beforeCount: beforeSnapshot.length,
-            afterCount: afterSnapshot.length,
-            beforeUnits: beforeSnapshot.map(u => ({ id: u.id, hp: u.hp, pos: `(${u.position.row},${u.position.col})` }))
-        });
-        
         const changes = {
             deaths: [],      // Units died (hp > 0 → hp = 0)  
             damaged: [],     // Units damaged (hp decreased but alive)
@@ -818,16 +752,8 @@ class GameInstance {
                 return;
             }
             
-            // console.log(`🔧 COMPARING UNIT ${beforeUnit.id}:`, {
-            //     before: { hp: beforeUnit.hp, alive: beforeUnit.isAlive },
-            //     after: { hp: afterUnit.hp, alive: afterUnit.isAlive },
-            //     hpChanged: beforeUnit.hp !== afterUnit.hp,
-            //     aliveChanged: beforeUnit.isAlive !== afterUnit.isAlive
-            // });
-            
             if (beforeUnit.isAlive && !afterUnit.isAlive) {
                 // Unit died
-                console.log(`💀 DEATH: ${beforeUnit.id} died (${beforeUnit.hp} → ${afterUnit.hp})`);
                 changes.deaths.push({
                     unitId: beforeUnit.id,
                     unitName: beforeUnit.name,
@@ -840,7 +766,6 @@ class GameInstance {
                 });
             } else if (beforeUnit.hp > afterUnit.hp) {
                 // Unit damaged but alive
-                console.log(`🩸 DAMAGE: ${beforeUnit.id} damaged (${beforeUnit.hp} → ${afterUnit.hp})`);
                 changes.damaged.push({
                     unitId: beforeUnit.id,
                     unitName: beforeUnit.name,
@@ -853,7 +778,6 @@ class GameInstance {
                 });
             } else {
                 // Unit unaffected (in range but no damage)
-                console.log(`✅ UNAFFECTED: ${beforeUnit.id} no change (${beforeUnit.hp} → ${afterUnit.hp})`);
                 changes.unaffected.push({
                     unitId: beforeUnit.id,
                     unitName: beforeUnit.name,
@@ -861,14 +785,6 @@ class GameInstance {
                     position: beforeUnit.position
                 });
             }
-        });
-        
-        console.log(`🔧 ANALYZE RESULT:`, {
-            deaths: changes.deaths.length,
-            damaged: changes.damaged.length,
-            unaffected: changes.unaffected.length,
-            deathDetails: changes.deaths.map(d => ({ id: d.unitId, cause: d.deathCause })),
-            damageDetails: changes.damaged.map(d => ({ id: d.unitId, damage: d.damageTaken }))
         });
         
         return {
