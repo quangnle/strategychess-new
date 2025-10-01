@@ -36,6 +36,9 @@ class GameLogic {
         // thực hiện effect Adjacent Penalty
         this._adjacentPenaltyEffect();
 
+        // xóa effect ADJACENT_PENALTY cho các unit đang bị ADJACENT_PENALTY nhưng không đứng cạnh enemy
+        this._removeAdjacentPenaltyEffect();
+
         // bật effect suicide cho các unit có ability SUICIDE
         this._suicideEffect();  
         
@@ -709,6 +712,21 @@ class GameLogic {
         // thêm effect SUICIDE cho các unit đó
         suicideUnits.forEach(u => {
             u.effects.push({ name: SUICIDE });
+        });
+    }
+
+    _removeAdjacentPenaltyEffect() {
+        const allUnits = this._getAllUnits();
+        // xóa effect ADJACENT_PENALTY cho các unit đang bị ADJACENT_PENALTY nhưng không đứng cạnh enemy
+        allUnits.forEach(u => {
+            let adjacentEnemies = [];
+            if (u.abilities.includes(ADJACENT_PENALTY)) {
+                const adjacentCells = this._get4AdjacentCells(u.row, u.col);
+                adjacentEnemies = adjacentCells.map(cell => this._getUnitByPosition(cell.row, cell.col)).filter(e => e && e.teamId !== u.teamId && e.hp > 0);
+            }
+            if (adjacentEnemies.length === 0) {
+                u.effects = u.effects.filter(e => e.name !== ADJACENT_PENALTY);
+            }
         });
     }
 
