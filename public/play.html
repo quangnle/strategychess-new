@@ -23,6 +23,59 @@
             backdrop-filter: blur(10px);
             background: rgba(31, 41, 55, 0.9);
         }
+        
+        /* Responsive canvas container */
+        #game-canvas-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            touch-action: none; /* Prevent default touch behaviors */
+            -webkit-touch-callout: none; /* Prevent callout on iOS */
+            -webkit-user-select: none; /* Prevent text selection */
+            user-select: none;
+        }
+        
+        /* Mobile-specific adjustments */
+        @media (max-width: 768px) {
+            #game-canvas-container {
+                min-height: 400px;
+                margin: 0 5px; /* 5px margin each side */
+                height: calc(100vh - 150px); /* Use most of viewport height */
+            }
+            
+            /* Ensure canvas doesn't overflow on mobile */
+            .game-panel {
+                max-width: 100vw;
+                height: 100%;
+                overflow: hidden;
+            }
+            
+            /* Hide sidebars on mobile to give more space to canvas */
+            aside {
+                display: none !important;
+            }
+            
+            /* Adjust main game area for mobile */
+            main {
+                flex-direction: column;
+            }
+            
+            /* Make action info panel more compact on mobile */
+            .bg-gray-800.border-t {
+                padding: 8px;
+            }
+        }
+        
+        /* Tablet adjustments */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            #game-canvas-container {
+                min-height: 350px;
+                padding: 12px;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col overflow-hidden">

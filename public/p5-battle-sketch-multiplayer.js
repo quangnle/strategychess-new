@@ -21,22 +21,35 @@ class P5BattleGraphicsMultiplayer {
         this.currentTurnActionArrows = [];
         this.lastTurnTeamId = null;
         
-        // Canvas dimensions
-        this.canvasWidth = 800;
-        this.canvasHeight = 730;
-        this.topPanelHeight = 100;
+        // Device detection and responsive sizing
+        this.deviceType = this.detectDeviceType();
+        this.viewportSize = this.getViewportSize();
         
-        // Calculate cell size
-        this.cellSize = Math.min(
-            this.canvasWidth / BOARD_COLS,
-            (this.canvasHeight - this.topPanelHeight) / BOARD_ROWS
-        );
+        // Canvas dimensions - now responsive
+        const canvasConfig = this.calculateCanvasSize();
+        this.canvasWidth = canvasConfig.width;
+        this.canvasHeight = canvasConfig.height;
+        this.topPanelHeight = canvasConfig.topPanelHeight;
+        
+        // Calculate cell size with responsive constraints
+        this.cellSize = this.calculateCellSize();
+        
+        // Cell dimensions are set by calculateCellSize method
+        // this.cellWidth and this.cellHeight are already set
         
         // Board positioning
-        this.boardWidth = BOARD_COLS * this.cellSize;
-        this.boardHeight = BOARD_ROWS * this.cellSize;
-        this.offsetX = (this.canvasWidth - this.boardWidth) / 2;
-        this.offsetY = this.topPanelHeight + 5;
+        this.boardWidth = BOARD_COLS * this.cellWidth;
+        this.boardHeight = BOARD_ROWS * this.cellHeight;
+        
+        // For mobile: center board horizontally, top panel at top
+        if (this.deviceType === 'mobile') {
+            this.offsetX = 0; // No horizontal offset for mobile (already centered by margin)
+            this.offsetY = this.topPanelHeight + 5; // 5px gap below top panel
+        } else {
+            // For tablet/desktop: center board in canvas
+            this.offsetX = (this.canvasWidth - this.boardWidth) / 2;
+            this.offsetY = this.topPanelHeight + 5;
+        }
         
         // Load images
         this.images = {};
@@ -45,6 +58,192 @@ class P5BattleGraphicsMultiplayer {
         // Setup P5
         this.setupP5();
         
+    }
+
+    // Device detection and responsive sizing methods
+    detectDeviceType() {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const userAgent = navigator.userAgent.toLowerCase();
+        
+        // Mobile detection
+        const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent) ||
+                        (width <= 768 && height <= 1024);
+        
+        // Tablet detection
+        const isTablet = !isMobile && (width <= 1024 && width > 768);
+        
+        if (isMobile) return 'mobile';
+        if (isTablet) return 'tablet';
+        return 'desktop';
+    }
+    
+    getViewportSize() {
+        return {
+            width: window.innerWidth,
+            height: window.innerHeight
+        };
+    }
+    
+    calculateCanvasSize() {
+        const { width: viewportWidth, height: viewportHeight } = this.viewportSize;
+        
+        let config = {
+            width: 800,
+            height: 730,
+            topPanelHeight: 100
+        };
+        
+        switch (this.deviceType) {
+            case 'mobile':
+                // Mobile: Fixed layout with specific measurements
+                const mobileMargin = 5; // 5px margin each side
+                const availableWidth = viewportWidth - (mobileMargin * 2); // Total 10px margin
+                const topPanelHeight = 100; // Fixed 100px top panel
+                
+                // Calculate cell dimensions
+                const cellWidth = availableWidth / BOARD_COLS; // (W - 10) / 11
+                const cellHeight = cellWidth * 1.1; // 110% of width
+                
+                // Calculate total board height
+                const boardHeight = BOARD_ROWS * cellHeight;
+                
+                // Calculate total canvas height needed
+                const totalCanvasHeight = topPanelHeight + boardHeight + 10; // 10px bottom margin
+                
+                config.width = availableWidth;
+                config.height = Math.min(totalCanvasHeight, viewportHeight * 0.95); // Max 95% of viewport
+                config.topPanelHeight = topPanelHeight;
+                break;
+                
+            case 'tablet':
+                // Tablet: Balanced approach
+                const tabletWidth = Math.min(viewportWidth * 0.9, 800);
+                const tabletHeight = Math.min(viewportHeight * 0.85, 650);
+                config.width = tabletWidth;
+                config.height = tabletHeight;
+                config.topPanelHeight = Math.max(70, tabletWidth * 0.1);
+                break;
+                
+            case 'desktop':
+            default:
+                // Desktop: Keep original size
+                break;
+        }
+        
+        return config;
+    }
+    
+    calculateCellSize() {
+        const gameAreaHeight = this.canvasHeight - this.topPanelHeight;
+        
+        // Calculate cell sizes separately for width and height
+        const cellWidth = this.canvasWidth / BOARD_COLS;
+        const cellHeight = gameAreaHeight / BOARD_ROWS;
+        
+        // For mobile: use fixed layout calculations
+        if (this.deviceType === 'mobile') {
+            // Use the calculated values from calculateCanvasSize
+            const mobileMargin = 5;
+            const availableWidth = this.canvasWidth;
+            const calculatedCellWidth = availableWidth / BOARD_COLS;
+            const calculatedCellHeight = calculatedCellWidth * 1.1;
+            
+            this.cellWidth = calculatedCellWidth;
+            this.cellHeight = calculatedCellHeight;
+            
+            return calculatedCellHeight; // Return height as primary cell size
+        }
+        
+        // For tablet and desktop: keep square cells
+        const baseCellSize = Math.min(cellWidth, cellHeight);
+        
+        let minCellSize, maxCellSize;
+        switch (this.deviceType) {
+            case 'tablet':
+                minCellSize = 30;
+                maxCellSize = 50;
+                break;
+            case 'desktop':
+            default:
+                minCellSize = 35;
+                maxCellSize = 60;
+                break;
+        }
+        
+        const constrainedSize = Math.max(minCellSize, Math.min(maxCellSize, baseCellSize));
+        this.cellWidth = constrainedSize;
+        this.cellHeight = constrainedSize;
+        
+        return constrainedSize;
+    }
+    
+    handleWindowResize() {
+        // Debounce resize events
+        if (this.resizeTimeout) {
+            clearTimeout(this.resizeTimeout);
+        }
+        
+        this.resizeTimeout = setTimeout(() => {
+            // Update viewport size
+            this.viewportSize = this.getViewportSize();
+            
+            // Recalculate canvas size
+            const canvasConfig = this.calculateCanvasSize();
+            this.canvasWidth = canvasConfig.width;
+            this.canvasHeight = canvasConfig.height;
+            this.topPanelHeight = canvasConfig.topPanelHeight;
+            
+            // Recalculate cell size
+            this.cellSize = this.calculateCellSize();
+            
+            // Update board dimensions
+            this.boardWidth = BOARD_COLS * this.cellWidth;
+            this.boardHeight = BOARD_ROWS * this.cellHeight;
+            
+            // Update board positioning based on device type
+            if (this.deviceType === 'mobile') {
+                this.offsetX = 0; // No horizontal offset for mobile
+                this.offsetY = this.topPanelHeight + 5;
+            } else {
+                this.offsetX = (this.canvasWidth - this.boardWidth) / 2;
+                this.offsetY = this.topPanelHeight + 5;
+            }
+            
+            // Resize P5 canvas
+            if (this.p) {
+                this.p.resizeCanvas(this.canvasWidth, this.canvasHeight);
+            }
+            
+            console.log(`📱 Canvas resized for ${this.deviceType}: ${this.canvasWidth}x${this.canvasHeight}, cellSize: ${this.cellWidth.toFixed(1)}x${this.cellHeight.toFixed(1)}px`);
+        }, 250); // 250ms debounce
+    }
+    
+    // Debug method to show responsive info
+    logResponsiveInfo() {
+        console.log('📱 Responsive Canvas Info:', {
+            deviceType: this.deviceType,
+            viewport: this.viewportSize,
+            canvas: { width: this.canvasWidth, height: this.canvasHeight },
+            cellSize: { width: this.cellWidth, height: this.cellHeight },
+            board: { width: this.boardWidth, height: this.boardHeight },
+            offsets: { x: this.offsetX, y: this.offsetY },
+            topPanelHeight: this.topPanelHeight
+        });
+        
+        // Mobile layout verification
+        if (this.deviceType === 'mobile') {
+            const expectedCellWidth = (this.viewportSize.width - 10) / BOARD_COLS;
+            const expectedCellHeight = expectedCellWidth * 1.1;
+            console.log('📐 Mobile Layout Check:', {
+                expectedCellWidth: expectedCellWidth.toFixed(1),
+                actualCellWidth: this.cellWidth.toFixed(1),
+                expectedCellHeight: expectedCellHeight.toFixed(1),
+                actualCellHeight: this.cellHeight.toFixed(1),
+                topPanelHeight: this.topPanelHeight,
+                aspectRatio: (this.cellHeight / this.cellWidth).toFixed(2)
+            });
+        }
     }
 
     loadImages() {
@@ -79,10 +278,20 @@ class P5BattleGraphicsMultiplayer {
                     this.handleCanvasClick(p.mouseX, p.mouseY);
                 });
                 
+                // Touch handler for mobile
+                canvas.touchStarted(() => {
+                    this.handleCanvasClick(p.mouseX, p.mouseY);
+                });
+                
                 // Keyboard handler
                 p.keyPressed = () => {
                     this.handleKeyPress(p.key);
                 };
+                
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    this.handleWindowResize();
+                });
             };
             
             p.draw = () => {
@@ -620,13 +829,13 @@ class P5BattleGraphicsMultiplayer {
                 const isLight = (row + col) % 2 === 0;
                 this.p.fill(isLight ? 240 : 220);
                 this.p.noStroke();
-                this.p.rect(x, y, this.cellSize, this.cellSize);
+                this.p.rect(x, y, this.cellWidth, this.cellHeight);
                 
                 // Cell border
                 this.p.stroke(200);
                 this.p.strokeWeight(1);
                 this.p.noFill();
-                this.p.rect(x, y, this.cellSize, this.cellSize);
+                this.p.rect(x, y, this.cellWidth, this.cellHeight);
             }
         }
     }
@@ -638,13 +847,13 @@ class P5BattleGraphicsMultiplayer {
             // Fill the cell with highlight color
             this.p.fill(cell.color[0], cell.color[1], cell.color[2], cell.color[3] || 255);
             this.p.noStroke();
-            this.p.rect(x, y, this.cellSize, this.cellSize);
+            this.p.rect(x, y, this.cellWidth, this.cellHeight);
             
             // Highlight border
             this.p.stroke(cell.borderColor[0], cell.borderColor[1], cell.borderColor[2]);
             this.p.strokeWeight(3);
             this.p.noFill();
-            this.p.rect(x, y, this.cellSize, this.cellSize);
+            this.p.rect(x, y, this.cellWidth, this.cellHeight);
         });
     }
 
@@ -677,8 +886,8 @@ class P5BattleGraphicsMultiplayer {
     drawExplosionCenter(position) {
         // ✅ PERSPECTIVE FIX: Use getBoardPosition for correct perspective transformation
         const { x, y } = this.getBoardPosition(position.row, position.col);
-        const centerX = x + this.cellSize / 2;
-        const centerY = y + this.cellSize / 2;
+        const centerX = x + this.cellWidth / 2;
+        const centerY = y + this.cellHeight / 2;
         
         // ✅ Explosion icon at suicide center
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
@@ -696,8 +905,8 @@ class P5BattleGraphicsMultiplayer {
     drawDeathEffect(position) {
         // ✅ PERSPECTIVE FIX: Use getBoardPosition for correct perspective transformation
         const { x, y } = this.getBoardPosition(position.row, position.col);
-        const centerX = x + this.cellSize / 2;
-        const centerY = y + this.cellSize / 2;
+        const centerX = x + this.cellWidth / 2;
+        const centerY = y + this.cellHeight / 2;
         
         // ✅ Set text properties
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
@@ -722,10 +931,10 @@ class P5BattleGraphicsMultiplayer {
         const toPos = this.getBoardPosition(to.row, to.col);
         
         // Calculate center of cells
-        const x1 = fromPos.x + this.cellSize / 2;
-        const y1 = fromPos.y + this.cellSize / 2;
-        const x2 = toPos.x + this.cellSize / 2;
-        const y2 = toPos.y + this.cellSize / 2;
+        const x1 = fromPos.x + this.cellWidth / 2;
+        const y1 = fromPos.y + this.cellHeight / 2;
+        const x2 = toPos.x + this.cellWidth / 2;
+        const y2 = toPos.y + this.cellHeight / 2;
         
         // Don't draw arrow if from and to are the same
         if (x1 === x2 && y1 === y2) return;
@@ -807,7 +1016,7 @@ class P5BattleGraphicsMultiplayer {
             this.p.stroke(255, 255, 0);
             this.p.strokeWeight(3);
             this.p.noFill();
-            this.p.rect(x - 2, y - 2, this.cellSize + 4, this.cellSize + 4);
+            this.p.rect(x - 2, y - 2, this.cellWidth + 4, this.cellHeight + 4);
         }
         
         // Selectable unit highlight (if it's player's turn and unit can be selected)
@@ -815,15 +1024,15 @@ class P5BattleGraphicsMultiplayer {
             this.p.stroke(0, 255, 0);
             this.p.strokeWeight(2);
             this.p.noFill();
-            this.p.rect(x, y, this.cellSize, this.cellSize);
+            this.p.rect(x, y, this.cellWidth, this.cellHeight);
         }
         
         // Unit image
         const imageKey = `${unit.armyType || unit.name}_${unitColor}`;
         if (this.images[imageKey]) {
-            const imgSize = this.cellSize * 0.8;
-            const imgX = x + (this.cellSize - imgSize) / 2;
-            const imgY = y + (this.cellSize - imgSize) / 2;
+            const imgSize = Math.min(this.cellWidth, this.cellHeight) * 0.8;
+            const imgX = x + (this.cellWidth - imgSize) / 2;
+            const imgY = y + (this.cellHeight - imgSize) / 2;
             
             this.p.image(this.images[imageKey], imgX, imgY, imgSize, imgSize);
         }
@@ -836,9 +1045,9 @@ class P5BattleGraphicsMultiplayer {
     }
     
     drawHPBar(unit, x, y, unitColor) {
-        const barWidth = this.cellSize * 0.8;
+        const barWidth = this.cellWidth * 0.8;
         const barHeight = 4;
-        const barX = x + (this.cellSize - barWidth) / 2;
+        const barX = x + (this.cellWidth - barWidth) / 2;
         const barY = y + 2;
         
         // Background
@@ -869,7 +1078,7 @@ class P5BattleGraphicsMultiplayer {
         // Show effect icons
         unit.effects.forEach((effect, index) => {
             const iconX = x + 8 + (index * 12);
-            const iconY = y + this.cellSize - 12;
+            const iconY = y + this.cellHeight - 12;
             
             this.p.fill(255, 255, 255, 200);
             
@@ -983,16 +1192,16 @@ class P5BattleGraphicsMultiplayer {
         }
         
         return {
-            x: this.offsetX + displayCol * this.cellSize,
-            y: this.offsetY + displayRow * this.cellSize
+            x: this.offsetX + displayCol * this.cellWidth,
+            y: this.offsetY + displayRow * this.cellHeight
         };
     }
 
 
     getLogicalPosition(screenX, screenY) {
         // Convert screen coordinates to logical board position
-        let col = Math.floor((screenX - this.offsetX) / this.cellSize);
-        let row = Math.floor((screenY - this.offsetY) / this.cellSize);
+        let col = Math.floor((screenX - this.offsetX) / this.cellWidth);
+        let row = Math.floor((screenY - this.offsetY) / this.cellHeight);
         
         // Apply reverse perspective transformation
         if (!this.isPlayerBlue) {
