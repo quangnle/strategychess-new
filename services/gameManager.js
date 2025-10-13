@@ -600,6 +600,26 @@ class GameInstance {
         console.log(`Game ${this.matchId} ended. Winner: ${winner}`);
     }
     
+    // Kết thúc game bằng forfeit (player đối thủ thoát ra)
+    forfeitGame(winnerPlayerId) {
+        this.status = 'finished';
+        this.endedAt = new Date();
+        
+        // Determine winner team based on player ID
+        const winnerTeam = this.getPlayerTeam(winnerPlayerId);
+        
+        // Set winner info
+        this.winner = {
+            teamId: winnerTeam,
+            playerId: winnerPlayerId,
+            reason: 'opponent_forfeit'
+        };
+        
+        console.log(`Game ${this.matchId} ended by forfeit. Winner: ${winnerPlayerId} (${winnerTeam} team)`);
+        
+        return this.winner;
+    }
+    
     // Cleanup resources
     cleanup() {
         this.gameLogic = null;

@@ -613,13 +613,30 @@ function showGameOverModal(data) {
     
     let resultText = '';
     if (data.winner) {
-        const isWinner = data.winner.userId === currentUser.userId;
+        // Check if winner is determined by player ID or user ID
+        const winnerUserId = data.winner.playerId || data.winner.userId;
+        const isWinner = winnerUserId === currentUser.userId;
+        
+        // Determine win reason
+        let winReasonText = '';
+        if (data.reason === 'opponent_disconnected') {
+            winReasonText = isWinner ? 'Your opponent disconnected!' : 'You disconnected from the game';
+        } else if (data.reason === 'opponent_left') {
+            winReasonText = isWinner ? 'Your opponent left the game!' : 'You left the game';
+        } else if (data.winner.reason === 'opponent_forfeit') {
+            winReasonText = isWinner ? 'Your opponent forfeited!' : 'You forfeited';
+        } else {
+            // Normal win by destroying base
+            const winnerName = data.winner.username || (isWinner ? 'You' : 'Your opponent');
+            winReasonText = `${winnerName} destroyed the enemy base!`;
+        }
+        
         resultText = `
             <div class="text-2xl font-bold ${isWinner ? 'text-green-400' : 'text-red-400'} mb-2">
                 ${isWinner ? '🎉 Victory!' : '💔 Defeat'}
             </div>
-            <div class="text-gray-300">
-                ${data.winner.username} won the game!
+            <div class="text-gray-300 mb-2">
+                ${winReasonText}
             </div>
         `;
     } else {

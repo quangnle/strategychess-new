@@ -126,6 +126,46 @@ class GameHandlers {
             }
 
             const matchId = socket.currentGameId;
+            const gameInstance = this.gameManager.getGame(matchId);
+            
+            console.log(`User ${socket.username} leaving game ${matchId}`);
+            
+            // Check if game should end due to forfeit
+            if (gameInstance && gameInstance.status === 'active') {
+                // Check if game hasn't ended naturally
+                const gameEndResult = gameInstance.gameLogic.isGameEnd();
+                
+                if (gameEndResult === 0) {
+                    // Game is still active, check remaining players
+                    const remainingPlayers = gameInstance.players.filter(p => p !== socket.userId);
+                    
+                    if (remainingPlayers.length === 1) {
+                        // Only 1 player left → forfeit win
+                        const winnerId = remainingPlayers[0];
+                        const winner = gameInstance.forfeitGame(winnerId);
+                        
+                        // Get winner username from match players
+                        const players = this.service.store.getMatchPlayers(matchId);
+                        const winnerPlayer = players.find(p => p.userId === winnerId);
+                        if (winnerPlayer) {
+                            winner.username = winnerPlayer.username;
+                        }
+                        
+                        console.log(`🏳️ Game ${matchId} ended by forfeit. Winner: ${winnerId} (${winner.username})`);
+                        
+                        // Notify remaining player
+                        io.to(`game_${matchId}`).emit('game:ended', {
+                            matchId: matchId,
+                            winner: winner,
+                            gameState: gameInstance.getGameState(),
+                            reason: 'opponent_left'
+                        });
+                    } else if (remainingPlayers.length === 0) {
+                        // Both players left, just cleanup
+                        console.log(`🧹 All players left game ${matchId}, cleaning up`);
+                    }
+                }
+            }
             
             // Remove player from game instance
             this.gameManager.removePlayerFromGame(matchId, socket.userId);
@@ -251,17 +291,55 @@ class GameHandlers {
         try {
             if (socket.currentGameId) {
                 const matchId = socket.currentGameId;
+                const gameInstance = this.gameManager.getGame(matchId);
+                
+                console.log(`User ${socket.username} disconnected from game ${matchId}`);
+                
+                // Check if game should end due to forfeit
+                if (gameInstance && gameInstance.status === 'active') {
+                    // Check if game hasn't ended naturally
+                    const gameEndResult = gameInstance.gameLogic.isGameEnd();
+                    
+                    if (gameEndResult === 0) {
+                        // Game is still active, check remaining players
+                        const remainingPlayers = gameInstance.players.filter(p => p !== socket.userId);
+                        
+                        if (remainingPlayers.length === 1) {
+                            // Only 1 player left → forfeit win
+                            const winnerId = remainingPlayers[0];
+                            const winner = gameInstance.forfeitGame(winnerId);
+                            
+                            // Get winner username from match players
+                            const players = this.service.store.getMatchPlayers(matchId);
+                            const winnerPlayer = players.find(p => p.userId === winnerId);
+                            if (winnerPlayer) {
+                                winner.username = winnerPlayer.username;
+                            }
+                            
+                            console.log(`🏳️ Game ${matchId} ended by forfeit. Winner: ${winnerId} (${winner.username})`);
+                            
+                            // Notify remaining player
+                            io.to(`game_${matchId}`).emit('game:ended', {
+                                matchId: matchId,
+                                winner: winner,
+                                gameState: gameInstance.getGameState(),
+                                reason: 'opponent_disconnected'
+                            });
+                        } else if (remainingPlayers.length === 0) {
+                            // Both players left, just cleanup
+                            console.log(`🧹 All players left game ${matchId}, cleaning up`);
+                        }
+                    }
+                }
                 
                 // Remove player from game instance
                 this.gameManager.removePlayerFromGame(matchId, socket.userId);
                 
-                // Notify other players
+                // Notify other players (if any)
                 socket.to(`game_${matchId}`).emit('game:player_left', {
                     userId: socket.userId,
                     username: socket.username
                 });
-
-                console.log(`User ${socket.username} disconnected from game ${matchId}`);
             }
         } catch (error) {
             console.error('Error handling game disconnect:', error);
