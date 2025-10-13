@@ -502,6 +502,7 @@ function selectHero(hero, card) {
     
     selectedHero = hero;
     
+    updateMovementPointDisplay();
     updateReadyButton();
 }
 
@@ -509,7 +510,6 @@ function selectHero(hero, card) {
 function selectUnit(unit, card) {
     // Check if we already have 5 units
     if (selectedUnits.length >= 5) {
-        alert('You can only select 5 units. Remove a unit first to add a new one.');
         return;
     }
     
@@ -524,6 +524,7 @@ function selectUnit(unit, card) {
     
     // Update unit counter
     updateUnitCounter();
+    updateMovementPointDisplay();
     updateReadyButton();
 }
 
@@ -565,6 +566,7 @@ function removeUnitFromSlot(slotIndex) {
     // Reorganize all slots
     reorganizeUnitSlots();
     updateUnitCounter();
+    updateMovementPointDisplay();
     updateReadyButton();
 }
 
@@ -590,6 +592,40 @@ function reorganizeUnitSlots() {
 function updateUnitCounter() {
     const unitCounter = document.getElementById('unit-counter');
     unitCounter.textContent = `(${selectedUnits.length}/5)`;
+}
+
+// Calculate total movement point (sum of all speeds)
+function calculateMovementPoint() {
+    let totalSpeed = 0;
+    
+    // Add hero speed if selected
+    if (selectedHero) {
+        const heroName = selectedHero.name;
+        const heroDef = UNIT_TYPES[heroName];
+        if (heroDef) {
+            totalSpeed += heroDef.speed;
+        }
+    }
+    
+    // Add all unit speeds
+    selectedUnits.forEach(unit => {
+        const unitName = unit.name;
+        const unitDef = UNIT_TYPES[unitName];
+        if (unitDef) {
+            totalSpeed += unitDef.speed;
+        }
+    });
+    
+    return totalSpeed;
+}
+
+// Update movement point display
+function updateMovementPointDisplay() {
+    const movementPointElement = document.getElementById('movement-point');
+    if (movementPointElement) {
+        const totalSpeed = calculateMovementPoint();
+        movementPointElement.textContent = totalSpeed;
+    }
 }
 
 // Update ready button
