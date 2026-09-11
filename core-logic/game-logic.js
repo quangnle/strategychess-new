@@ -44,7 +44,7 @@ class GameLogic {
         
         // đưa unit đang turn vào danh sách đã end turn
         if (this.currentTurnUnit) {
-            this.alreadyEndedTurnUnits.push(this.currentTurnUnit);
+            this.markEndedTurn(this.currentTurnUnit);
         }
 
         // kiểm tra xem có phải round mới không
@@ -89,14 +89,27 @@ class GameLogic {
     _calculateTeamMovementPoint(teamId) {
         const team = this._getTeamById(teamId);
         const aliveUnits = team.units.filter(u => u.hp > 0 && u.name !== "Base");
-        const notYetEndedTurnUnits = aliveUnits.filter(u => !this.alreadyEndedTurnUnits.includes(u));
+        const notYetEndedTurnUnits = aliveUnits.filter(u => !this.hasEndedTurn(u));
         return notYetEndedTurnUnits.reduce((total, unit) => total + this._getCurrentSpeed(unit), 0);
     }
 
     // Kiểm tra xem round có hoàn thành chưa
     _isRoundComplete() {
         const allUnits = this._getAllUnits().filter(u => u.hp > 0 && u.name !== "Base");
-        return allUnits.every(unit => this.alreadyEndedTurnUnits.includes(unit));
+        return allUnits.every(unit => this.hasEndedTurn(unit));
+    }
+
+    // So sánh theo id chứ không theo định danh object, để trạng thái vẫn đúng sau khi clone.
+    // Mảng vẫn lưu object để các đường serialize/multiplayer hiện có không đổi.
+    hasEndedTurn(unit) {
+        if (!unit) return false;
+        return this.alreadyEndedTurnUnits.some(u => u && u.id === unit.id);
+    }
+
+    markEndedTurn(unit) {
+        if (unit && !this.hasEndedTurn(unit)) {
+            this.alreadyEndedTurnUnits.push(unit);
+        }
     }
 
     // Reset các action của turn hiện tại
@@ -132,7 +145,7 @@ class GameLogic {
         }
 
         // Kiểm tra xem unit đã end turn chưa
-        if (this.alreadyEndedTurnUnits.includes(unit)) {
+        if (this.hasEndedTurn(unit)) {
             return false;
         }
 
@@ -160,15 +173,17 @@ class GameLogic {
             return false;
         }
 
-        // check if unit has effect LOCK in the effect list
-        const effect = unit.effects.find(e => e.name === LOCK);
-        if (effect) {            
-            // giảm trừ duration của effect
-            effect.duration -= 1;
-            // loại bỏ effect có duration bằng 0
-            if (effect.duration === 0) {
-                unit.effects.splice(unit.effects.indexOf(effect), 1);
-            }
+        // thực hiện hành động là kết thúc lượt, không được di chuyển sau đó nữa
+        if (this.currentTurnActions.hasAttacked ||
+            this.currentTurnActions.hasHealed ||
+            this.currentTurnActions.hasSacrificed ||
+            this.currentTurnActions.hasSuicided) {
+            return false;
+        }
+
+        // LOCK chỉ cấm di chuyển, không cấm tấn công.
+        // duration chỉ được giảm trong _reduceEffectDuration ở cuối round.
+        if (this._hasTimedEffect(unit, LOCK)) {
             return false;
         }
 
@@ -296,6 +311,11 @@ class GameLogic {
             return false;
         }
 
+        // không được hồi vượt trần máu gốc
+        if (target.hp >= this._getMaxHp(target)) {
+            return false;
+        }
+
         // update unit hp
         target.hp += 1;
 
@@ -419,11 +439,62 @@ class GameLogic {
     // End turn cho unit hiện tại
     endTurn() {
         if (this.currentTurnUnit) {
-            this.alreadyEndedTurnUnits.push(this.currentTurnUnit);
+            this.markEndedTurn(this.currentTurnUnit);
             this.currentTurnUnit = null;
             this.currentTurnTeamId = null;
             this._resetTurnActions();
         }
+    }
+
+    // Bỏ lượt của một unit: dùng khi unit bị vây kín, không di chuyển và cũng không có
+    // mục tiêu nào để hành động. Nếu không truyền unit thì tự chọn unit khả dụng đầu tiên
+    // của team đang có quyền đi.
+    passTurn(unit = null) {
+        if (this.isGameEnd() !== 0) {
+            return false;
+        }
+
+        let target = unit || this.currentTurnUnit;
+        if (!target) {
+            const team = this._getTeamById(this.currentTurnTeamId);
+            if (!team) return false;
+            target = team.units.find(u => u.hp > 0 && u.name !== "Base" && !this.hasEndedTurn(u));
+        }
+
+        if (!target || target.teamId !== this.currentTurnTeamId || this.hasEndedTurn(target)) {
+            return false;
+        }
+
+        this.currentTurnUnit = target;
+        return true;
+    }
+
+    // Kiểm tra unit có bất kỳ hành động hợp lệ nào trong lượt này không.
+    hasAnyLegalAction(unit) {
+        if (!unit || unit.hp <= 0 || this.hasEndedTurn(unit)) return false;
+
+        const isLocked = this._hasTimedEffect(unit, LOCK);
+        if (!isLocked && this.getReachableCells(unit).length > 0) return true;
+
+        const penalized = this._hasTimedEffect(unit, ADJACENT_PENALTY);
+        if (!penalized && this._getEnemiesWithinRange(unit, unit.range).length > 0) return true;
+
+        if (unit.abilities.includes(HEAL)) {
+            const targets = this._getAlliesWithinRange(unit, unit.magicRange)
+                .filter(t => t.hp < this._getMaxHp(t));
+            if (targets.length > 0) return true;
+        }
+
+        if (unit.abilities.includes(SACRIFICE) && unit.hp > 1) {
+            const targets = this._get4AdjacentCells(unit.row, unit.col)
+                .map(c => this._getUnitByPosition(c.row, c.col))
+                .filter(t => t && t.teamId === unit.teamId && t.id !== unit.id && t.hp > 0 && t.hp < this._getMaxHp(t));
+            if (targets.length > 0) return true;
+        }
+
+        if (unit.abilities.includes(SUICIDE) && unit.hp === 1) return true;
+
+        return false;
     }
 
     isGameEnd() {        
@@ -520,21 +591,30 @@ class GameLogic {
             return [];
         }
 
-        // tìm tất cả các unit trong 4 ô xung quanh unit
+        // tìm tất cả các ally trong 4 ô xung quanh unit (không sacrifice cho quân địch)
         let sacrificeableTargets = this._get4AdjacentCells(unit.row, unit.col).map(cell => this._getUnitByPosition(cell.row, cell.col));
-        sacrificeableTargets = sacrificeableTargets.filter(t => t && t.hp > 0 && t.hp < this._getMaxHp(t));
+        sacrificeableTargets = sacrificeableTargets.filter(t =>
+            t && t.teamId === unit.teamId && t.id !== unit.id && t.hp > 0 && t.hp < this._getMaxHp(t)
+        );
         return sacrificeableTargets;
     }
 
     getReachableCells(unit) {
-        // kiếm tra unit có ability WIND_WALK không
-        if (unit.abilities.includes(WIND_WALK)) {
-            // nếu có thì dùng Manhattan distance để tìm reachable cells
-            return this._getReachableCellsMahattan(unit, this._getCurrentSpeed(unit));    
+        if (this._hasTimedEffect(unit, LOCK)) {
+            return [];
         }
+        if (unit.abilities.includes(WIND_WALK)) {
+            return this._getReachableCellsMahattan(unit, this._getCurrentSpeed(unit));
+        }
+        return this._getReachableCellsBFS(unit, this._getCurrentSpeed(unit));
+    }
 
-        // nếu không thì dùng BFS để tìm reachable cells
-        return this._getReachableCellsBFS(unit, this._getCurrentSpeed(unit));        
+    _hasTimedEffect(unit, name) {
+        if (!unit || !unit.effects) return false;
+        const effect = unit.effects.find(e => e.name === name);
+        if (!effect) return false;
+        if (effect.duration === undefined) return true;
+        return effect.duration > 0;
     }
 
     // Lấy thông tin turn hiện tại
@@ -581,16 +661,29 @@ class GameLogic {
         return speed;
     }
 
+    // Lưới occupancy dựng tại chỗ cho mỗi lần gọi: true nghĩa là ô bị quân còn sống chiếm.
+    // Không cache giữa các lần gọi vì vị trí unit có thể bị sửa trực tiếp từ bên ngoài
+    // (ví dụ _simulateMoveState trong ai-processor), cache sẽ bị stale.
+    _buildOccupancy() {
+        const occ = new Uint8Array(BOARD_ROWS * BOARD_COLS);
+        const allUnits = this._getAllUnits();
+        for (let i = 0; i < allUnits.length; i++) {
+            const u = allUnits[i];
+            if (u.hp <= 0) continue;
+            if (u.row < 0 || u.row >= BOARD_ROWS || u.col < 0 || u.col >= BOARD_COLS) continue;
+            occ[u.row * BOARD_COLS + u.col] = 1;
+        }
+        return occ;
+    }
+
     _getReachableCellsMahattan(unit, range) {
+        const occ = this._buildOccupancy();
         const reachableCells = [];
         for (let r = 0; r < BOARD_ROWS; r++) {
             for (let c = 0; c < BOARD_COLS; c++) {
-                // kiểm tra xem ô này có nằm trong range của unit không và ô này không có unit
-                const isInRange = this._getManhattanDistance(unit, { row: r, col: c } ) <= range;
-                const isEmptyCell = this._getUnitByPosition(r, c) === null || this._getUnitByPosition(r, c).hp <= 0;
-                if (isInRange && isEmptyCell) {
-                    const cell = { row: r, col: c };
-                    reachableCells.push(cell);
+                if (occ[r * BOARD_COLS + c]) continue;
+                if (this._getManhattanDistance(unit, { row: r, col: c }) <= range) {
+                    reachableCells.push({ row: r, col: c });
                 }
             }
         }
@@ -598,38 +691,43 @@ class GameLogic {
     }
 
     _getReachableCellsBFS(unit, range) {
-        const visited = new Set();
-        const queue = [{ row: unit.row, col: unit.col, d:0 }];
+        const occ = this._buildOccupancy();
+        const dist = new Int8Array(BOARD_ROWS * BOARD_COLS).fill(-1);
         const reachableCells = [];
-        
-        while (queue.length > 0) {
-            const curCell = queue.shift();
-            const cellKey = `${curCell.row},${curCell.col}`;
-            
-            if (visited.has(cellKey)) continue;
-            visited.add(cellKey);
-            
-            // Add current cell to reachable cells if it's not the unit's position
-            if (curCell.row !== unit.row || curCell.col !== unit.col) {
-                reachableCells.push(curCell);
-            }
-            
-            const adjacentCells = this._get4AdjacentCells(curCell.row, curCell.col);
-            adjacentCells.forEach(cell => {
-                const adjacentCellKey = `${cell.row},${cell.col}`;
-                // cập nhật độ dài đường đi
-                cell.d = curCell.d + 1;
-                // kiểm tra xem ô này có là ô empty không
-                const isEmptyCell = !this._getUnitByPosition(cell.row, cell.col) || this._getUnitByPosition(cell.row, cell.col).hp <= 0;
-                //kiểm tra xem ô này có nằm trong range của unit không
-                const isInRange = cell.d <= range;
-                // nếu ô này là ô empty, chưa được visit và nằm trong range của unit thì thêm vào queue
-                if (isEmptyCell && !visited.has(adjacentCellKey) && isInRange) {
-                    queue.push(cell);
-                    // visited.add(adjacentCellKey);
-                }
-            });
+
+        const startIdx = unit.row * BOARD_COLS + unit.col;
+        if (unit.row < 0 || unit.row >= BOARD_ROWS || unit.col < 0 || unit.col >= BOARD_COLS) {
+            return reachableCells;
         }
+
+        dist[startIdx] = 0;
+        const queue = new Int16Array(BOARD_ROWS * BOARD_COLS);
+        let head = 0, tail = 0;
+        queue[tail++] = startIdx;
+
+        while (head < tail) {
+            const idx = queue[head++];
+            const d = dist[idx];
+            if (d >= range) continue;
+
+            const row = (idx / BOARD_COLS) | 0;
+            const col = idx - row * BOARD_COLS;
+
+            for (let k = 0; k < 4; k++) {
+                const nr = row + (k === 0 ? -1 : k === 1 ? 1 : 0);
+                const nc = col + (k === 2 ? -1 : k === 3 ? 1 : 0);
+                if (nr < 0 || nr >= BOARD_ROWS || nc < 0 || nc >= BOARD_COLS) continue;
+
+                const nIdx = nr * BOARD_COLS + nc;
+                if (dist[nIdx] !== -1) continue;
+                if (occ[nIdx]) continue;
+
+                dist[nIdx] = d + 1;
+                reachableCells.push({ row: nr, col: nc, d: d + 1 });
+                queue[tail++] = nIdx;
+            }
+        }
+
         return reachableCells;
     }
 
@@ -688,20 +786,15 @@ class GameLogic {
 
     _reduceEffectDuration() {
         const allUnits = this._getAllUnits().filter(u => u.hp > 0);
-        // giảm trừ duration của các effect có duration
         allUnits.forEach(u => {
-            if (u.effects && u.effects.length > 0) {
-                // ✅ FIX: Giữ lại permanent effects (no duration) và temporary effects (duration > 0)
-                // Chỉ loại bỏ expired effects (duration = 0)
-                u.effects = u.effects.filter(e => e.duration === undefined || e.duration > 0);
-                
-                // ✅ FIX: Chỉ giảm duration cho effects có duration property
-                u.effects.forEach(e => {
-                    if (e.duration !== undefined) {
-                        e.duration -= 1;
-                    }
-                });
-            }
+            if (!u.effects || u.effects.length === 0) return;
+            u.effects.forEach(e => {
+                if (e.duration !== undefined) e.duration -= 1;
+            });
+            // Trừ trước rồi mới xóa: duration 2 sống đúng 2 lần hết round.
+            // Filter-rồi-trừ để lại object duration=0 thêm một round, makeMove
+            // vẫn thấy LOCK nên quân bị khoá chân dài hơn tài liệu.
+            u.effects = u.effects.filter(e => e.duration === undefined || e.duration > 0);
         });
     }
 
@@ -763,7 +856,6 @@ class GameLogic {
                 berserkUnit.speed += 1;
                 // xóa ability BERSERK khỏi berserkUnit để tránh bị effect BERSERK lặp lại
                 berserkUnit.abilities = berserkUnit.abilities.filter(a => a !== BERSERK);
-                console.log(`Berserk effect applied to ${berserkUnit.name}`);
             }
         }
     }

@@ -97,7 +97,6 @@ export class TankerStrategy extends BaseStrategy {
             const d = this.gameLogic._getManhattanDistance({ row, col }, enemy);
             distanceBonus  += 1 / d * this.alphaTable[enemy.armyType];
         }
-        console.log(`distanceBonus: ${distanceBonus} of (${row}, ${col})`);
         score += distanceBonus;
 
         // tính bonus dựa trên số lượng quân thù có Adjacent Penalty

@@ -30,7 +30,7 @@ class Unit {
             UNIT_TYPES.Tanker.range,
             UNIT_TYPES.Tanker.magicRange
         );
-        unit.abilities = UNIT_TYPES.Tanker.abilities;
+        unit.abilities = [...UNIT_TYPES.Tanker.abilities];
         return unit;
     }
 
@@ -47,7 +47,7 @@ class Unit {
             UNIT_TYPES.Ranger.range,
             UNIT_TYPES.Ranger.magicRange
         );
-        unit.abilities = UNIT_TYPES.Ranger.abilities;
+        unit.abilities = [...UNIT_TYPES.Ranger.abilities];
         return unit;
     }
 
@@ -64,7 +64,7 @@ class Unit {
             UNIT_TYPES.Assassin.range,
             UNIT_TYPES.Assassin.magicRange
         );
-        unit.abilities = UNIT_TYPES.Assassin.abilities;
+        unit.abilities = [...UNIT_TYPES.Assassin.abilities];
         return unit;
     }
 
@@ -81,7 +81,7 @@ class Unit {
             UNIT_TYPES.Trezdin.range,
             UNIT_TYPES.Trezdin.magicRange
         );
-        unit.abilities = UNIT_TYPES.Trezdin.abilities;
+        unit.abilities = [...UNIT_TYPES.Trezdin.abilities];
         return unit;
     }
 
@@ -98,7 +98,7 @@ class Unit {
             UNIT_TYPES.Trarex.range,
             UNIT_TYPES.Trarex.magicRange
         );
-        unit.abilities = UNIT_TYPES.Trarex.abilities;
+        unit.abilities = [...UNIT_TYPES.Trarex.abilities];
         return unit;
     }
 
@@ -115,7 +115,7 @@ class Unit {
             UNIT_TYPES.Taki.range,
             UNIT_TYPES.Taki.magicRange
         );
-        unit.abilities = UNIT_TYPES.Taki.abilities;
+        unit.abilities = [...UNIT_TYPES.Taki.abilities];
         return unit;
     }
 
@@ -132,7 +132,7 @@ class Unit {
             UNIT_TYPES.Ara.range,
             UNIT_TYPES.Ara.magicRange
         );
-        unit.abilities = UNIT_TYPES.Ara.abilities;
+        unit.abilities = [...UNIT_TYPES.Ara.abilities];
         return unit;
     }
 
@@ -149,7 +149,7 @@ class Unit {
             UNIT_TYPES.Nizza.range,
             UNIT_TYPES.Nizza.magicRange
         );
-        unit.abilities = UNIT_TYPES.Nizza.abilities;
+        unit.abilities = [...UNIT_TYPES.Nizza.abilities];
         return unit;
     }
 
@@ -166,7 +166,7 @@ class Unit {
             UNIT_TYPES.Wizzi.range,
             UNIT_TYPES.Wizzi.magicRange
         );
-        unit.abilities = UNIT_TYPES.Wizzi.abilities;
+        unit.abilities = [...UNIT_TYPES.Wizzi.abilities];
         return unit;
     }
 
@@ -183,14 +183,16 @@ class Unit {
             UNIT_TYPES.Base.range,
             UNIT_TYPES.Base.magicRange
         );
-        unit.abilities = UNIT_TYPES.Base.abilities;
+        unit.abilities = [...UNIT_TYPES.Base.abilities];
         return unit;
     }
 
     clone() {
         const newUnit = new Unit(this.armyType, this.id, this.teamId, this.name, this.row, this.col, this.hp, this.speed, this.range, this.magicRange);
         newUnit.abilities = [...this.abilities];
-        newUnit.effects = [...this.effects];
+        // deep copy: effect object phải tách hẳn, nếu không việc giảm duration trên bản clone
+        // sẽ sửa luôn trạng thái của ván đấu thật.
+        newUnit.effects = this.effects.map(e => ({ ...e }));
         return newUnit;
     }
 }

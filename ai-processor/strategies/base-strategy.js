@@ -2,6 +2,34 @@ import { ADJACENT_PENALTY } from "../../core-logic/definitions.js";
 import GameLogic from "../../core-logic/game-logic.js";
 
 export class BaseStrategy {
+    // Mặc định cho các strategy chưa override (Trarex / Taki / Nizza / Wizzi).
+    // Thiếu bảng này thì chooseBestTarget luôn trả null và các hero đó không bao giờ tấn công.
+    attackBonusTable = {
+        'Tanker': 55,
+        'Assassin': 70,
+        'Ranger': 85,
+        'Base': 25,
+        'Trezdin': 60,
+        'Taki': 45,
+        'Trarex': 90,
+        'Ara': 100,
+        'Nizza': 60,
+        'Wizzi': 90
+    };
+
+    alphaTable = {
+        'Tanker': 8,
+        'Assassin': 15,
+        'Ranger': 21,
+        'Base': 5,
+        'Trezdin': 10,
+        'Taki': 7,
+        'Trarex': 24,
+        'Ara': 27,
+        'Nizza': 15,
+        'Wizzi': 24
+    };
+
     constructor(gameLogic) {
         this.gameLogic = gameLogic;
     }
@@ -43,8 +71,13 @@ export class BaseStrategy {
         // giả lập unit đi đến vị trí row, col
         const gameLogicCopy = this._simulateMoveState(unit, row, col, this.gameLogic);
         for (const enemy of enemies) {
+            // enemy đã đi xong lượt trong round này thì không thể phản đòn nữa
+            if (this.gameLogic.hasEndedTurn(enemy)) {
+                continue;
+            }
+
             // chỉ kiểm tra những enemy đang không bị effect của ADJACENT_PENALTY
-            if (enemy.effects.includes(ADJACENT_PENALTY)) {
+            if (enemy.effects.some(e => e.name === ADJACENT_PENALTY)) {
                 continue;
             }
 
@@ -112,10 +145,25 @@ export class BaseStrategy {
         return adjacentCount;
     }
 
-    // Base evaluatePosition method that can be overridden
+    // Đánh giá mặc định cho các strategy chưa override.
+    // Trước đây trả về 0 nên Trarex / Taki / Nizza / Wizzi đứng yên tại chỗ.
     evaluatePosition(unit, row, col) {
-        // Default implementation - subclasses should override this
-        return 0;
+        let score = 0;
+
+        const attackableTargets = this._getAttackableTargets(unit, row, col);
+        if (attackableTargets.length > 0) {
+            score += this._calculateAttackScore(unit, attackableTargets);
+        }
+
+        score += this._countAdjacents(unit, row, col) * 10;
+        score -= this._countThreats(unit, row, col) * 20;
+
+        for (const enemy of this._getEnemies(unit)) {
+            const d = this.gameLogic._getManhattanDistance({ row, col }, enemy);
+            if (d > 0) score += (1 / d) * (this.alphaTable[enemy.armyType] ?? 10);
+        }
+
+        return score;
     }
 
     chooseBestTarget(unit, row, col) {

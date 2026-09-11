@@ -22,7 +22,7 @@ export class RangerStrategy extends BaseStrategy {
         
         let isAdjacentPenalty = false;
         // kiểm tra xem có đang bị effect của ADJACENT_PENALTY không
-        if (unit.effects.includes(ADJACENT_PENALTY)) {
+        if (unit.effects.some(e => e.name === ADJACENT_PENALTY)) {
             isAdjacentPenalty = true;
         }
 

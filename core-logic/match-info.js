@@ -35,22 +35,22 @@ class MatchInfo {
             let hero = null;
             switch (heroType) {
                 case UNIT_TYPES.Trezdin:
-                    hero = Unit.createTrezdin(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    hero = Unit.createTrezdin(`${teamData.teamId}_${heroType.name}`, teamData.teamId, heroRow, 5);
                     break;
                 case UNIT_TYPES.Trarex:
-                    hero = Unit.createTrarex(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    hero = Unit.createTrarex(`${teamData.teamId}_${heroType.name}`, teamData.teamId, heroRow, 5);
                     break;
                 case UNIT_TYPES.Taki:
-                    hero = Unit.createTaki(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    hero = Unit.createTaki(`${teamData.teamId}_${heroType.name}`, teamData.teamId, heroRow, 5);
                     break;
                 case UNIT_TYPES.Ara:
-                    hero = Unit.createAra(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    hero = Unit.createAra(`${teamData.teamId}_${heroType.name}`, teamData.teamId, heroRow, 5);
                     break;
                 case UNIT_TYPES.Wizzi:
-                    hero = Unit.createWizzi(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    hero = Unit.createWizzi(`${teamData.teamId}_${heroType.name}`, teamData.teamId, heroRow, 5);
                     break;
                 case UNIT_TYPES.Nizza:
-                    hero = Unit.createNizza(`${teamData.teamName}_${heroType.name}`, teamData.teamId, heroRow, 5);
+                    hero = Unit.createNizza(`${teamData.teamId}_${heroType.name}`, teamData.teamId, heroRow, 5);
                     break;
                 default:
                     throw new Error(`Hero type ${teamData.hero} not found`);
@@ -68,13 +68,13 @@ class MatchInfo {
             const unitCol = startCol + i; // Cột 3, 4, 5, 6, 7
             switch (unitType) {
                 case UNIT_TYPES.Tanker:
-                    unit = Unit.createTanker(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
+                    unit = Unit.createTanker(`${teamData.teamId}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
                     break;
                 case UNIT_TYPES.Ranger:
-                    unit = Unit.createRanger(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
+                    unit = Unit.createRanger(`${teamData.teamId}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
                     break;
                 case UNIT_TYPES.Assassin:
-                    unit = Unit.createAssassin(`${teamData.teamName}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
+                    unit = Unit.createAssassin(`${teamData.teamId}_${unitType.name}_${i}`, teamData.teamId, unitRow, unitCol);
                     break;
                 default:
                     throw new Error(`Unit type ${unitType.name} not found`);
@@ -83,7 +83,7 @@ class MatchInfo {
             team.addUnit(unit);     
         }
         // tạo base cho team
-        team.addUnit(Unit.createBase(`${teamData.teamName}_base`, teamData.teamId, baseRow, 5));
+        team.addUnit(Unit.createBase(`${teamData.teamId}_base`, teamData.teamId, baseRow, 5));
         return team;
     }
 
