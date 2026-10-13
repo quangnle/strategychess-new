@@ -1,3 +1,5 @@
+import { t, initI18n } from './i18n.js';
+
 // Chat functionality
 let chatSocket = null;
 let currentUser = null;
@@ -10,7 +12,15 @@ function escapeHtml(text) {
 }
 
 // Initialize everything after DOM is loaded
+let lastWaitingMatches = [];
+let onlineCountCache = 0;
+
 document.addEventListener('DOMContentLoaded', () => {
+    initI18n();
+    window.addEventListener('sc:lang', () => {
+        displayWaitingMatches(lastWaitingMatches);
+        if (onlineCountCache != null) updateOnlineCount(onlineCountCache);
+    });
     // Initialize chat functionality
     initializeChat();
     
@@ -32,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
              const matchName = matchNameInput.value.trim();
              
              // If no match name provided, use current user's name
-             const finalMatchName = matchName || (currentUser?.username || 'Player') + "'s Match";
+             const finalMatchName = matchName || t('home.matchPossessive', { name: currentUser?.username || 'Player' });
              
              console.log('Creating match:', finalMatchName);
              createMatch(finalMatchName);
@@ -79,6 +89,14 @@ function initializeChat() {
         }
     }
     
+    const toggleChat = document.getElementById('toggle-chat');
+    if (toggleChat) {
+        toggleChat.addEventListener('click', () => {
+            const chatContainer = document.getElementById('chat-container');
+            if (chatContainer) chatContainer.classList.toggle('hidden');
+        });
+    }
+
     if (sendButton) {
         sendButton.addEventListener('click', sendMessage);
     }
@@ -97,7 +115,7 @@ function initializeChat() {
     chatSocket.on('connect', () => {
         console.log('Connected to chat server');
         if (chatMessages) {
-            chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Connected to chat server</div>';
+            chatMessages.innerHTML = `<div class="text-center text-green-500 text-sm">${t('chat.connected')}</div>`;
         }
     });
     
@@ -105,7 +123,7 @@ function initializeChat() {
         currentUser = data;
         console.log('User connected:', data);
         if (chatMessages) {
-            chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Welcome to the chat!</div>';
+            chatMessages.innerHTML = `<div class="text-center text-green-500 text-sm">${t('chat.welcome')}</div>`;
         }
         if (onlineCount) {
             updateOnlineCount(data.onlineUsers.length);
@@ -124,7 +142,7 @@ function initializeChat() {
     });
     
     chatSocket.on('user:joined', (data) => {
-        addSystemMessage(`${data.username} joined the chat`);
+        addSystemMessage(t('chat.joined', { name: data.username }));
         if (onlineCount) {
             updateOnlineCount(data.onlineUsers.length);
         }
@@ -134,7 +152,7 @@ function initializeChat() {
     });
     
     chatSocket.on('user:left', (data) => {
-        addSystemMessage(`${data.username} left the chat`);
+        addSystemMessage(t('chat.left', { name: data.username }));
         if (onlineCount) {
             updateOnlineCount(data.onlineUsers.length);
         }
@@ -151,11 +169,11 @@ function initializeChat() {
     });
     
     chatSocket.on('error', (data) => {
-        addSystemMessage(`Error: ${data.message}`, 'error');
+        addSystemMessage(t('chat.error', { msg: data.message }), 'error');
     });
     
     chatSocket.on('disconnect', () => {
-        addSystemMessage('Disconnected from chat server', 'error');
+        addSystemMessage(t('chat.disconnected'), 'error');
     });
     
     // Helper functions
@@ -205,7 +223,8 @@ function initializeChat() {
     
     function updateOnlineCount(count) {
         if (onlineCount) {
-            onlineCount.textContent = `Online: ${count}`;
+            onlineCountCache = count;
+            onlineCount.textContent = t('home.online', { n: count });
         }
     }
     
@@ -213,7 +232,7 @@ function initializeChat() {
         if (!onlineUsersList) return;
         
         if (!users || users.length === 0) {
-            onlineUsersList.innerHTML = '<div class="text-center text-gray-500 text-xs">No users online</div>';
+            onlineUsersList.innerHTML = `<div class="text-center text-gray-500 text-xs">${t('home.noUsers')}</div>`;
             return;
         }
         
@@ -269,18 +288,19 @@ async function loadWaitingMatches() {
         }
     } catch (error) {
         console.error('Error loading matches:', error);
-        displayWaitingMatchesError('Failed to load matches');
+        displayWaitingMatchesError(t('home.loadError'));
     }
 }
 
 // Display waiting matches
 function displayWaitingMatches(matches) {
     const waitingMatchesContainer = document.getElementById('waiting-matches');
+    lastWaitingMatches = matches || [];
     
     if (!matches || matches.length === 0) {
         waitingMatchesContainer.innerHTML = `
             <div class="text-center text-gray-500 text-sm">
-                No waiting matches available
+                ${t('home.noMatches')}
             </div>
         `;
         return;
@@ -297,16 +317,16 @@ function displayWaitingMatches(matches) {
                 <div class="flex-1">
                     <div class="font-medium text-white">${escapeHtml(match.name)}</div>
                     <div class="text-sm text-gray-300">
-                        Created by ${escapeHtml(match.creatorUsername)}
+                        ${t('home.createdBy', { name: escapeHtml(match.creatorUsername) })}
                     </div>
                     <div class="text-xs text-gray-400">
-                        Players: ${match.playerCount}/${match.maxPlayers} • 
-                        Created: ${new Date(match.createdAt).toLocaleTimeString()}
+                        ${t('home.players', { cur: match.playerCount, max: match.maxPlayers })} • 
+                        ${t('home.createdAt', { time: new Date(match.createdAt).toLocaleTimeString() })}
                     </div>
                 </div>
                 <button class="join-match-btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition-colors"
                         data-match-id="${match.id}">
-                    Join
+                    ${t('home.joinBtn')}
                 </button>
             </div>
         `;
@@ -326,7 +346,7 @@ function displayWaitingMatchesError(error) {
     const waitingMatchesContainer = document.getElementById('waiting-matches');
     waitingMatchesContainer.innerHTML = `
         <div class="text-center text-red-400 text-sm">
-            Error: ${escapeHtml(error)}
+            ${t('chat.error', { msg: escapeHtml(error) })}
         </div>
     `;
 }
@@ -334,7 +354,7 @@ function displayWaitingMatchesError(error) {
 // Create a new match
 async function createMatch(matchName) {
     if (!currentUser) {
-        alert('Please wait for connection to establish');
+        alert(t('home.waitConnection'));
         return;
     }
     
@@ -368,14 +388,14 @@ async function createMatch(matchName) {
         }
     } catch (error) {
         console.error('Error creating match:', error);
-        alert('Failed to create match. Please try again.');
+        alert(t('home.createError'));
     }
 }
 
 // Join an existing match
 async function joinMatch(matchId) {
     if (!currentUser) {
-        alert('Please wait for connection to establish');
+        alert(t('home.waitConnection'));
         return;
     }
     
@@ -409,6 +429,6 @@ async function joinMatch(matchId) {
         }
     } catch (error) {
         console.error('Error joining match:', error);
-        alert('Failed to join match. Please try again.');
+        alert(t('home.joinError'));
     }
 }

@@ -1,3 +1,5 @@
+import { t, initI18n } from './i18n.js';
+
 // Import modules
 let UNIT_TYPES = null;
 let P5BattleGraphics = null;
@@ -68,7 +70,7 @@ class TeamManager {
         
         if (!UNIT_TYPES) {
             console.error('UNIT_TYPES not loaded yet');
-            container.innerHTML = '<div class="text-red-400">Loading heroes...</div>';
+            container.innerHTML = `<div class="text-red-400">${t('ai.loadingHeroes')}</div>`;
             return;
         }
         
@@ -86,7 +88,7 @@ class TeamManager {
             
             card.innerHTML = `
                 <div class="text-center">
-                    <img src="${hero[`image_${this.teamColor}`]}" alt="${heroName}" class="w-10 h-10 mx-auto">
+                    <img src="${hero[`image_${this.teamColor}`]}" alt="${heroName}" class="w-12 h-12 mx-auto">
                     <div class="text-[10px] leading-tight font-semibold text-gray-200 truncate">${heroName}</div>
                 </div>
             `;
@@ -107,7 +109,7 @@ class TeamManager {
         
         if (!UNIT_TYPES) {
             console.error('UNIT_TYPES not loaded yet');
-            container.innerHTML = '<div class="text-red-400">Loading units...</div>';
+            container.innerHTML = `<div class="text-red-400">${t('ai.loadingUnits')}</div>`;
             return;
         }
         
@@ -154,11 +156,32 @@ class TeamManager {
                 ? `bg-${this.teamColor}-800 border-2 border-${this.teamColor}-400 rounded p-1 cursor-pointer`
                 : `bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-${this.teamColor}-400 rounded p-1 cursor-pointer`;
         });
+        this.renderPickedHero();
+    }
+
+    renderPickedHero() {
+        const el = document.getElementById(`${this.teamColor}-hero-picked`);
+        if (!el) return;
+        if (!this.selectedHero || !UNIT_TYPES[this.selectedHero]) {
+            el.innerHTML = `<div class="text-xs text-gray-500">${t('ai.noHero')}</div>`;
+            return;
+        }
+        const hero = UNIT_TYPES[this.selectedHero];
+        const img = hero[`image_${this.teamColor}`];
+        el.innerHTML = `
+            <div class="flex items-center gap-3 bg-gray-900/50 rounded p-2 border border-${this.teamColor}-500">
+                <img src="${img}" alt="" class="w-14 h-14 flex-shrink-0">
+                <div>
+                    <div class="font-bold text-sm">${hero.name}</div>
+                    <div class="text-xs text-gray-300 mt-0.5">HP ${hero.hp} · Speed ${hero.speed} · Range ${hero.range}</div>
+                </div>
+            </div>
+        `;
     }
     
     addUnit(unitName) {
         if (this.selectedUnits.length >= this.maxUnits) {
-            alert(`You can only select ${this.maxUnits} regular units!`);
+            alert(t('ai.maxUnits', { n: this.maxUnits }));
             return;
         }
         
@@ -181,33 +204,25 @@ class TeamManager {
         }
         
         container.innerHTML = '';
-        
+
         this.selectedUnits.forEach((unitName, index) => {
             const unit = UNIT_TYPES[unitName];
-            if (!unit) {
-                console.error(`Unit not found: ${unitName}`);
-                return;
-            }
-            
+            if (!unit) return;
             const unitCard = document.createElement('div');
             unitCard.className = `bg-${this.teamColor}-800 border border-${this.teamColor}-400 rounded px-1 py-0.5 relative`;
-            
             unitCard.innerHTML = `
                 <div class="flex items-center gap-1 pr-3">
                     <img src="${unit[`image_${this.teamColor}`]}" alt="${unitName}" class="w-6 h-6">
                     <div class="text-[10px] text-${this.teamColor}-200">${unitName}</div>
                 </div>
-                <button class="remove-unit-btn absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center" data-index="${index}">
+                <button class="remove-unit-btn absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
                     ✕
                 </button>
             `;
-            
-            // Add event listener instead of onclick
             const removeBtn = unitCard.querySelector('.remove-unit-btn');
             if (removeBtn) {
                 removeBtn.addEventListener('click', () => this.removeUnit(index));
             }
-            
             container.appendChild(unitCard);
         });
     }
@@ -231,21 +246,20 @@ class TeamManager {
             this.teamName = nameInput.value;
         }
         
-        // Update global start button state
+        this.renderPickedHero();
         this.updateGlobalStartButton();
     }
     
     updateGlobalStartButton() {
-        const globalBtn = document.getElementById('global-start-btn');
-        if (!globalBtn) return;
-        
-        // Check if teamManagers exists before accessing it
-        if (window.teamManagers && window.teamManagers.blue && window.teamManagers.red) {
-            const bothTeamsReady = window.teamManagers.blue.isReady() && window.teamManagers.red.isReady();
-            globalBtn.disabled = !bothTeamsReady;
-        } else {
-            globalBtn.disabled = true;
-        }
+        const buttons = [
+            document.getElementById('global-start-btn'),
+            document.getElementById('global-start-btn-mobile')
+        ];
+        const ready = window.teamManagers && window.teamManagers.blue && window.teamManagers.red
+            && window.teamManagers.blue.isReady() && window.teamManagers.red.isReady();
+        buttons.forEach(btn => {
+            if (btn) btn.disabled = !ready;
+        });
     }
     
     isReady() {
@@ -287,6 +301,17 @@ function initializeTeamManagers() {
 
 // Initialize everything after DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
+    initI18n();
+    window.addEventListener('sc:lang', () => {
+        if (window.teamManagers) {
+            window.teamManagers.blue.renderPickedHero();
+            window.teamManagers.red.renderPickedHero();
+        }
+        if (battleGraphics) {
+            updateAiStatusLine(battleGraphics.ai);
+            renderBattleHud(battleGraphics);
+        }
+    });
     // Load definitions first
     await loadDefinitions();
     
@@ -300,14 +325,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeChat();
     
     // Global start button handler
-    const globalStartBtn = document.getElementById('global-start-btn');
-    if (globalStartBtn) {
-        globalStartBtn.addEventListener('click', () => {
-            if (teamManagers && teamManagers.blue.isReady() && teamManagers.red.isReady()) {
-                startBattle();
+    const startBattleIfReady = () => {
+        if (teamManagers && teamManagers.blue.isReady() && teamManagers.red.isReady()) {
+            startBattle();
+        }
+    };
+    ['global-start-btn', 'global-start-btn-mobile'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', startBattleIfReady);
+    });
+
+    document.querySelectorAll('.team-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const team = btn.dataset.teamTab;
+            document.querySelectorAll('.team-tab').forEach(t => {
+                const on = t.dataset.teamTab === team;
+                t.classList.toggle('bg-blue-700', on && team === 'blue');
+                t.classList.toggle('bg-red-700', on && team === 'red');
+                t.classList.toggle('bg-gray-700', !on);
+            });
+            const blue = document.getElementById('blue-team-panel');
+            const red = document.getElementById('red-team-panel');
+            if (blue && red) {
+                blue.classList.toggle('hidden', team !== 'blue');
+                red.classList.toggle('hidden', team !== 'red');
+                blue.classList.add('md:block');
+                red.classList.add('md:block');
             }
         });
-    }
+    });
     
     // Back to selection button handler
     const backToSelectionBtn = document.getElementById('back-to-selection');
@@ -322,12 +368,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         endTurnBtn.addEventListener('click', handleEndTurn);
     }
 
+    const deselectCurrent = () => {
+        if (battleGraphics && battleGraphics.gameLogic.currentTurnUnit) {
+            battleGraphics.gameLogic.currentTurnUnit = null;
+        }
+    };
     const currentUnitPanel = document.getElementById('current-unit-panel');
-    if (currentUnitPanel) {
-        currentUnitPanel.addEventListener('click', () => {
-            if (battleGraphics && battleGraphics.gameLogic.currentTurnUnit) {
-                battleGraphics.gameLogic.currentTurnUnit = null;
-            }
+    if (currentUnitPanel) currentUnitPanel.addEventListener('click', deselectCurrent);
+    const mobileCurrent = document.getElementById('mobile-current-unit');
+    if (mobileCurrent) mobileCurrent.addEventListener('click', deselectCurrent);
+
+    const autoBtn = document.getElementById('ai-auto-btn');
+    if (autoBtn) {
+        autoBtn.addEventListener('click', () => {
+            if (battleGraphics) battleGraphics.handleKeyPress('a');
+        });
+    }
+    const stepBtn = document.getElementById('ai-step-btn');
+    if (stepBtn) {
+        stepBtn.addEventListener('click', () => {
+            if (battleGraphics) battleGraphics.handleKeyPress('d');
         });
     }
 
@@ -390,6 +450,10 @@ function showBattleScreen() {
     
     if (selectionScreen) selectionScreen.classList.add('hidden');
     if (battleScreen) battleScreen.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        if (battleGraphics && battleGraphics.resizeBoard) battleGraphics.resizeBoard();
+        window.dispatchEvent(new Event('resize'));
+    });
 }
 
 function showSelectionScreen() {
@@ -463,6 +527,9 @@ function initializeBattleGraphics(matchInfo) {
         console.log('P5 Battle graphics initialized successfully');
         updateAiStatusLine(battleGraphics.ai);
         renderBattleHud(battleGraphics);
+        requestAnimationFrame(() => {
+            if (battleGraphics && battleGraphics.resizeBoard) battleGraphics.resizeBoard();
+        });
     } catch (error) {
         console.error('Error initializing P5 battle graphics:', error);
     }
@@ -478,14 +545,29 @@ function destroyBattleGraphics() {
 
 function updateAiStatusLine(driver) {
     const el = document.getElementById('ai-status-line');
-    const keys = document.getElementById('ai-hotkeys');
     if (!el || !driver) return;
     el.textContent = driver.statusLine();
     el.classList.toggle('text-yellow-300', !!driver.thinking);
     el.classList.toggle('text-amber-200', !driver.thinking);
-    if (keys) {
-        keys.textContent = `[a] auto ${driver.autoPlay ? 'BẬT' : 'TẮT'} · [d] 1 nước`;
+    const autoBtn = document.getElementById('ai-auto-btn');
+    if (autoBtn) {
+        autoBtn.textContent = driver.autoPlay ? t('ai.autoOn') : t('ai.auto');
+        autoBtn.classList.toggle('bg-green-700', !!driver.autoPlay);
+        autoBtn.classList.toggle('bg-gray-700', !driver.autoPlay);
     }
+}
+
+function effectBadgesHtml(unit) {
+    if (!unit || !unit.effects) return '';
+    const parts = [];
+    const lock = unit.effects.find(e => e.name === 'lock' && (e.duration === undefined || e.duration > 0));
+    if (lock)         parts.push(`<span class="text-[9px] bg-purple-800 text-purple-100 px-1 rounded">${t('ai.lock')}</span>`);
+    if (unit.effects.some(e => e.name === 'adjacent penalty')) {
+        parts.push(`<span class="text-[9px] bg-red-800 text-red-100 px-1 rounded">${t('ai.noAttack')}</span>`);
+    }
+    const dash = unit.effects.find(e => e.name === 'dash' && (e.duration === undefined || e.duration > 0));
+    if (dash) parts.push(`<span class="text-[9px] bg-sky-800 text-sky-100 px-1 rounded">${t('ai.dash')}</span>`);
+    return parts.length ? `<span class="inline-flex gap-0.5 ml-1">${parts.join('')}</span>` : '';
 }
 
 function unitPortrait(unit, teamId) {
@@ -515,9 +597,9 @@ function renderTeamColumn(team, headerId, listId, accent) {
     header.innerHTML = `
         <div class="flex items-center justify-between">
             <div class="font-bold ${nameColor}">${team.teamName || team.teamId}</div>
-            ${isTurn ? '<span class="text-[10px] bg-green-700 text-white px-1.5 py-0.5 rounded">LƯỢT</span>' : ''}
+            ${isTurn ? `<span class="text-[10px] bg-green-700 text-white px-1.5 py-0.5 rounded">${t('ai.turn')}</span>` : ''}
         </div>
-        <div class="text-xs text-gray-300 mt-0.5">MP ${mp}${prio ? ' · Priority' : ''} · round ${gl.roundNo}</div>
+        <div class="text-xs text-gray-300 mt-0.5">MP ${mp}${prio ? ' · ' + t('ai.priority') : ''} · ${t('ai.round', { n: gl.roundNo })}</div>
     `;
 
     const units = team.units.filter(u => u.hp > 0);
@@ -532,15 +614,13 @@ function renderTeamColumn(team, headerId, listId, accent) {
         }`;
         const img = unitPortrait(unit, team.teamId);
         const maxHp = UNIT_TYPES && UNIT_TYPES[unit.name] ? UNIT_TYPES[unit.name].hp : unit.hp;
-        const lock = unit.effects && unit.effects.find(e => e.name === 'lock' && (e.duration === undefined || e.duration > 0));
         const tags = [];
-        if (ended && unit.name !== 'Base') tags.push('đã đi');
-        if (lock) tags.push('LOCK');
-        if (unit.effects && unit.effects.some(e => e.name === 'adjacent penalty')) tags.push('cấm đánh');
+        if (ended && unit.name !== 'Base') tags.push(t('ai.acted'));
+        const badges = effectBadgesHtml(unit);
         row.innerHTML = `
             ${img ? `<img src="${img}" alt="" class="w-7 h-7 flex-shrink-0">` : ''}
             <div class="min-w-0 flex-1">
-                <div class="truncate">${unit.name}${lock ? ' 🔒' : ''}</div>
+                <div class="truncate flex items-center gap-1">${unit.name}${badges}</div>
                 <div class="text-[10px] text-gray-400">HP ${unit.hp}/${maxHp}${tags.length ? ' · ' + tags.join(' · ') : ''}</div>
             </div>
         `;
@@ -555,26 +635,71 @@ function renderTeamColumn(team, headerId, listId, accent) {
     });
 }
 
-function renderCurrentUnitPanel() {
-    const el = document.getElementById('current-unit-panel');
-    if (!el || !battleGraphics) return;
+function currentUnitMarkup(compact) {
+    if (!battleGraphics) return '';
     const unit = battleGraphics.gameLogic.currentTurnUnit;
     if (!unit) {
-        el.innerHTML = `<div class="text-xs text-gray-400">CURRENT UNIT</div>
-            <div class="text-sm text-gray-500 mt-1">Chưa chọn — bấm quân trên bàn hoặc danh sách</div>`;
-        return;
+        return compact
+            ? `<div class="text-xs text-gray-500">${t('ai.noUnitCompact')}</div>`
+            : `<div class="text-xs text-gray-400">${t('ai.current')}</div>
+            <div class="text-sm text-gray-500 mt-1">${t('ai.noUnit')}</div>`;
     }
     const img = unitPortrait(unit, unit.teamId);
-    el.innerHTML = `
-        <div class="text-xs text-gray-400 mb-1">CURRENT UNIT <span class="text-gray-500">(bấm để bỏ chọn)</span></div>
+    const badges = effectBadgesHtml(unit);
+    return `
+        <div class="${compact ? '' : 'text-xs text-gray-400 mb-1'}">
+            ${compact ? '' : `${t('ai.current')} <span class="text-gray-500">${t('ai.tapDeselect')}</span>`}
+        </div>
         <div class="flex items-center gap-2">
-            ${img ? `<img src="${img}" alt="" class="w-10 h-10">` : ''}
+            ${img ? `<img src="${img}" alt="" class="${compact ? 'w-8 h-8' : 'w-10 h-10'}">` : ''}
             <div>
-                <div class="font-semibold text-sm">${unit.name}</div>
+                <div class="font-semibold text-sm flex items-center">${unit.name}${badges}</div>
                 <div class="text-xs text-gray-300">HP ${unit.hp} · Speed ${unit.speed} · Range ${unit.range}</div>
             </div>
         </div>
     `;
+}
+
+function renderCurrentUnitPanel() {
+    const el = document.getElementById('current-unit-panel');
+    if (el) el.innerHTML = currentUnitMarkup(false);
+    const mobile = document.getElementById('mobile-current-unit');
+    if (mobile) mobile.innerHTML = currentUnitMarkup(true);
+}
+
+function renderMobileRoster(graphics) {
+    const bar = document.getElementById('mobile-roster');
+    const mpBlue = document.getElementById('mobile-mp-blue');
+    const mpRed = document.getElementById('mobile-mp-red');
+    if (!bar || !graphics) return;
+    const gl = graphics.gameLogic;
+    if (mpBlue) mpBlue.textContent = `B ${gl._calculateTeamMovementPoint('blue')}`;
+    if (mpRed) mpRed.textContent = `R ${gl._calculateTeamMovementPoint('red')}`;
+
+    bar.innerHTML = '';
+    const teams = [graphics.matchInfo.team1, graphics.matchInfo.team2];
+    teams.forEach(team => {
+        team.units.filter(u => u.hp > 0 && u.name !== 'Base').forEach(unit => {
+            const ended = gl.hasEndedTurn(unit);
+            const isCurrent = gl.currentTurnUnit && gl.currentTurnUnit.id === unit.id;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `flex-shrink-0 rounded p-0.5 ${isCurrent ? 'ring-2 ring-yellow-400' : ended ? 'opacity-40' : ''}`;
+            const img = unitPortrait(unit, team.teamId);
+            const ring = team.teamId === 'red' ? 'border-red-500' : 'border-blue-500';
+            btn.innerHTML = `
+                <img src="${img}" alt="${unit.name}" class="w-9 h-9 border ${ring} rounded">
+                ${effectBadgesHtml(unit)}
+            `;
+            btn.title = unit.name;
+            btn.addEventListener('click', () => {
+                if (graphics.canSelectUnit(unit)) {
+                    graphics.gameLogic.currentTurnUnit = unit;
+                }
+            });
+            bar.appendChild(btn);
+        });
+    });
 }
 
 function renderBattleHud(graphics) {
@@ -582,6 +707,7 @@ function renderBattleHud(graphics) {
     renderTeamColumn(graphics.matchInfo.team1, 'blue-team-header', 'blue-team-units', 'blue');
     renderTeamColumn(graphics.matchInfo.team2, 'red-team-header', 'red-team-units', 'red');
     renderCurrentUnitPanel();
+    renderMobileRoster(graphics);
 }
 
 function handleEndTurn() {
@@ -669,7 +795,7 @@ function initializeChat() {
     chatSocket.on('connect', () => {
         console.log('Connected to chat server');
         if (chatMessages) {
-            chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Connected to chat server</div>';
+            chatMessages.innerHTML = `<div class="text-center text-green-500 text-sm">${t('chat.connected')}</div>`;
         }
     });
     
@@ -677,7 +803,7 @@ function initializeChat() {
         currentUser = data;
         console.log('User connected:', data);
         if (chatMessages) {
-            chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Welcome to the chat!</div>';
+            chatMessages.innerHTML = `<div class="text-center text-green-500 text-sm">${t('chat.welcome')}</div>`;
         }
         if (onlineCount) {
             updateOnlineCount(data.onlineUsers.length);
@@ -773,7 +899,7 @@ function initializeChat() {
     
     function updateOnlineCount(count) {
         if (onlineCount) {
-            onlineCount.textContent = `Online: ${count}`;
+            onlineCount.textContent = t('home.online', { n: count });
         }
     }
     

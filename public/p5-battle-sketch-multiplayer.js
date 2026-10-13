@@ -1,5 +1,6 @@
 // P5 Battle Graphics cho Multiplayer - chỉ render, không xử lý game logic
 import { BOARD_COLS, BOARD_ROWS, UNIT_TYPES } from '/core-logic/definitions.js';
+import { t } from './i18n.js';
 import GameLogic from '/core-logic/game-logic.js';
 
 class P5BattleGraphicsMultiplayer {
@@ -653,17 +654,22 @@ class P5BattleGraphicsMultiplayer {
         
         if (result === 1) {
             // Team 1 (blue) wins
-            resultText = this.isPlayerBlue ? 'VICTORY!' : 'DEFEAT!';
+            resultText = this.isPlayerBlue ? t('end.victory') : t('end.defeat');
             resultColor = this.isPlayerBlue ? [0, 255, 0] : [255, 0, 0];
         } else if (result === 2) {
             // Team 2 (red) wins
-            resultText = this.isPlayerBlue ? 'DEFEAT!' : 'VICTORY!';
+            resultText = this.isPlayerBlue ? t('end.defeat') : t('end.victory');
             resultColor = this.isPlayerBlue ? [255, 0, 0] : [0, 255, 0];
         } else {
-            resultText = 'DRAW!';
+            resultText = t('end.drawCaps');
             resultColor = [255, 255, 0];
         }
         
+        const winImg = result === 1 ? this.images['Base_blue'] : result === 2 ? this.images['Base_red'] : null;
+        if (winImg) {
+            const size = Math.min(this.canvasWidth, this.canvasHeight) * 0.22;
+            this.p.image(winImg, this.canvasWidth / 2 - size / 2, this.canvasHeight / 2 - size - 20, size, size);
+        }
         this.p.fill(resultColor[0], resultColor[1], resultColor[2]);
         this.p.text(resultText, this.canvasWidth / 2, this.canvasHeight / 2);
     }

@@ -1,9 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Strategy Chess</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/imgs/ui/logo.png">
+    <link rel="stylesheet" href="/brand.css">
+    <meta name="description" content="Strategy Chess — epic battles begin">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Strategy Chess">
+    <meta property="og:title" content="Strategy Chess">
+    <meta property="og:description" content="Strategy Chess — epic battles begin">
+    <meta property="og:image" content="/imgs/ui/strategy-chess-og-image.png">
+    <meta property="og:image:alt" content="Strategy Chess">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Strategy Chess">
+    <meta name="twitter:description" content="Strategy Chess — epic battles begin">
+    <meta name="twitter:image" content="/imgs/ui/strategy-chess-og-image.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
@@ -46,98 +60,115 @@
          }
      </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-gray-800 border-b border-gray-700 py-4">
+<body class="text-white min-h-screen flex flex-col">
+    <header class="bg-gray-900/55 backdrop-blur-sm border-b border-gray-700 py-4" style="padding-top: max(1rem, env(safe-area-inset-top));">
         <div class="container mx-auto px-4">
-            <h1 class="text-3xl font-bold text-yellow-400 text-center">STRATEGY CHESS</h1>
+            <div class="flex items-center justify-center">
+                <img src="/imgs/ui/logo.png" alt="Strategy Chess" class="site-logo">
+            </div>
+            <div class="flex items-center justify-center gap-2 mt-3">
+                <button type="button" data-lang-set="vi" class="px-2 py-1 rounded text-xs font-bold bg-gray-700">VI</button>
+                <button type="button" data-lang-set="en" class="px-2 py-1 rounded text-xs font-bold bg-gray-700">EN</button>
+                <button type="button" data-open-rules class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold px-3 py-1 rounded text-sm" data-i18n="nav.rules">Rules</button>
+            </div>
+            <div class="flex justify-center gap-2 mt-3 pointer-events-none select-none" aria-hidden="true">
+                <img src="./imgs/heroes/trezdin_blue.png" alt="" class="w-10 h-10 sm:w-12 sm:h-12 opacity-50">
+                <img src="./imgs/heroes/trarex_blue.png" alt="" class="w-10 h-10 sm:w-12 sm:h-12 opacity-50">
+                <img src="./imgs/heroes/taki_blue.png" alt="" class="w-10 h-10 sm:w-12 sm:h-12 opacity-50">
+                <img src="./imgs/heroes/ara_blue.png" alt="" class="w-10 h-10 sm:w-12 sm:h-12 opacity-50">
+                <img src="./imgs/heroes/nizza_blue.png" alt="" class="w-10 h-10 sm:w-12 sm:h-12 opacity-50">
+                <img src="./imgs/heroes/wizzi_blue.png" alt="" class="w-10 h-10 sm:w-12 sm:h-12 opacity-50">
+            </div>
         </div>
     </header>
 
-         <!-- Main Content Area -->
-     <main class="flex-1 container mx-auto px-4 py-8">
-         <div class="flex flex-col space-y-8">
-                           <!-- Action Buttons Section -->
-              <div class="flex flex-col items-center space-y-6">
-                                     <!-- Challenge With Friends Panel -->
-                   <div class="bg-gray-800 rounded-lg p-6 border border-gray-600 shadow-lg">
-                       <h3 class="text-xl font-bold text-yellow-400 text-center mb-6">Challenge With Friends</h3>
-                       <div class="flex items-center space-x-4">
-                           <label for="match-name" class="text-gray-300 font-medium">Match Name:</label>
-                           <input type="text" id="match-name" 
-                                  placeholder="Enter match name..." 
-                                  class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
-                           <button id="create-match-btn" 
-                                   class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded transition-colors">
-                               Create
-                           </button>
-                       </div>
-                   </div>
-                  
-                  <button id="play-ai-btn"
-                          class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-8 rounded-lg text-xl transition-colors shadow-lg w-full">
-                      PLAY WITH AI
+     <main class="flex-1 container mx-auto px-4 py-6">
+         <div class="flex flex-col space-y-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button id="play-ai-btn" type="button"
+                          class="bg-gray-800/85 hover:bg-gray-750 border border-green-500 rounded-lg p-4 text-left shadow-lg flex items-center gap-4">
+                      <img src="./imgs/heroes/trezdin_blue.png" alt="" class="w-16 h-16 flex-shrink-0">
+                      <div>
+                          <div class="text-green-400 font-bold text-lg" data-i18n="home.play">Play</div>
+                          <div class="text-white font-semibold" data-i18n="home.playAi">Play with AI</div>
+                          <div class="text-xs text-gray-400 mt-1" data-i18n="home.playAiHint">Solo practice</div>
+                      </div>
                   </button>
+                  <div class="bg-gray-800/85 rounded-lg p-4 border border-red-500/60 shadow-lg">
+                      <div class="flex items-center gap-3 mb-3">
+                          <img src="./imgs/heroes/trezdin_red.png" alt="" class="w-12 h-12">
+                          <div>
+                              <div class="text-red-300 font-bold" data-i18n="home.challenge">Challenge</div>
+                              <div class="text-sm text-gray-300" data-i18n="home.challengeFriends">Challenge With Friends</div>
+                          </div>
+                      </div>
+                      <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <input type="text" id="match-name"
+                                 data-i18n-placeholder="home.matchName"
+                                 placeholder="Match name..."
+                                 class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
+                          <button id="create-match-btn"
+                                  class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded whitespace-nowrap" data-i18n="home.create">
+                              Create
+                          </button>
+                      </div>
+                  </div>
               </div>
 
-              <!-- Waiting Matches Section -->
-              <div class="bg-gray-800 rounded-lg p-6 border border-gray-600 shadow-lg">
-                  <h3 class="text-xl font-bold text-yellow-400 text-center mb-6">Join Existing Matches</h3>
+              <div class="bg-gray-800/90 rounded-lg p-4 border border-gray-600 shadow-lg">
+                  <h3 class="text-lg font-bold text-yellow-400 text-center mb-4" data-i18n="home.join">Join Existing Matches</h3>
                   <div id="waiting-matches" class="space-y-3">
-                      <!-- Waiting matches will be populated here -->
-                      <div class="text-center text-gray-500 text-sm">Loading matches...</div>
+                      <div class="text-center text-gray-500 text-sm" data-i18n="home.loadingMatches">Loading matches...</div>
                   </div>
                   <div class="text-center mt-4">
-                      <button id="refresh-matches-btn" 
-                              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors">
-                          Refresh Matches
+                      <button id="refresh-matches-btn"
+                              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" data-i18n="home.refresh">
+                          Refresh
                       </button>
                   </div>
               </div>
- 
-             <!-- Chat Panel Section -->
-             <div class="bg-gray-800 rounded-lg p-6">
-                 <div class="flex items-center justify-between mb-4">
-                     <h3 class="text-xl font-bold text-yellow-400">CHAT PANEL</h3>
-                     <span id="online-count" class="text-sm text-gray-300">Online: 0</span>
+
+             <div class="bg-gray-800/90 rounded-lg p-4">
+                 <div class="flex items-center justify-between mb-2">
+                     <h3 class="text-lg font-bold text-yellow-400" data-i18n="home.chat">Chat</h3>
+                     <div class="flex items-center gap-3">
+                         <span id="online-count" class="text-sm text-gray-300">Online: 0</span>
+                         <button id="toggle-chat" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm" data-i18n="home.chat">Chat</button>
+                     </div>
                  </div>
-                 
-                 <div class="flex gap-4 h-96">
-                     <!-- Online Users List -->
-                     <div class="w-48 bg-gray-900 rounded p-4 border border-gray-600">
-                         <h4 class="text-sm font-semibold text-yellow-400 mb-3">Online Users</h4>
+                 <div id="chat-container" class="hidden">
+                 <div class="flex flex-col md:flex-row gap-4 md:h-80">
+                     <div class="md:w-48 bg-gray-900 rounded p-3 border border-gray-600">
+                         <h4 class="text-sm font-semibold text-yellow-400 mb-3" data-i18n="home.onlineUsers">Online Users</h4>
                          <div id="online-users-list" class="space-y-2">
-                             <div class="text-center text-gray-500 text-xs">No users online</div>
+                             <div class="text-center text-gray-500 text-xs" data-i18n="home.noUsers">No users online</div>
                          </div>
                      </div>
-                     
-                     <!-- Chat Messages and Input -->
-                     <div class="flex-1 flex flex-col">
-                         <!-- Chat Messages -->
-                         <div id="chat-messages" class="flex-1 bg-gray-900 rounded p-4 overflow-y-auto mb-4 border border-gray-600">
-                             <div class="text-center text-gray-500 text-sm">Welcome to Strategy Chess! Start chatting...</div>
+                     <div class="flex-1 flex flex-col min-h-[12rem]">
+                         <div id="chat-messages" class="flex-1 bg-gray-900 rounded p-4 overflow-y-auto mb-3 border border-gray-600 h-40 md:h-auto">
+                             <div class="text-center text-gray-500 text-sm" data-i18n="home.welcomeChat">Welcome to Strategy Chess! Start chatting...</div>
                          </div>
-                         
-                         <!-- Chat Input -->
                          <div class="flex space-x-2">
-                             <input type="text" id="chat-input" 
-                                    placeholder="Type your message..." 
+                             <input type="text" id="chat-input"
+                                    data-i18n-placeholder="home.typeMessage"
+                                    placeholder="Type your message..."
                                     class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
-                             <button id="send-message" 
-                                     class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                             <button id="send-message"
+                                     class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" data-i18n="home.send">
                                  Send
                              </button>
                          </div>
                      </div>
+                 </div>
                  </div>
              </div>
          </div>
      </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 border-t border-gray-700 py-4">
+    <footer class="bg-gray-900/70 backdrop-blur-sm border-t border-gray-700 py-4">
         <div class="container mx-auto px-4 text-center">
-            <p class="text-gray-400">&copy; 2024 Strategy Chess. All rights reserved.</p>
+            <button type="button" data-open-about class="text-yellow-400 hover:text-yellow-300 font-semibold tracking-wide" data-i18n="about.footer">Legos 2026</button>
         </div>
     </footer>
 

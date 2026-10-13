@@ -6,6 +6,7 @@
 // nghĩ, nên thời gian nghĩ được giảm xuống.
 
 import { snapshotFromGameLogic } from '/ai-processor/search/search-state.js';
+import { t } from './i18n.js';
 
 export const AI_MODE = {
     OFF: 'off',
@@ -225,13 +226,19 @@ export class AIDriver {
 
     // Dòng chữ hiển thị góc màn hình.
     statusLine() {
-        if (this.mode === AI_MODE.OFF) return 'AI: tắt';
-        const side = this.mode === AI_MODE.BOTH ? 'AI vs AI'
-            : this.mode === AI_MODE.BLUE ? 'AI cầm XANH' : 'AI cầm ĐỎ';
-        if (this.thinking) return `${side} — đang nghĩ...`;
+        if (this.mode === AI_MODE.OFF) return t('ai.off');
+        const side = this.mode === AI_MODE.BOTH ? t('ai.sideBoth')
+            : this.mode === AI_MODE.BLUE ? t('ai.sideBlue') : t('ai.sideRed');
+        if (this.thinking) return t('ai.thinking', { side });
         const i = this.lastInfo;
-        if (!i) return `${side} — sẵn sàng`;
-        return `${side} — depth ${i.depth}  điểm ${i.score.toFixed(0)}  ${(i.elapsed / 1000).toFixed(1)}s  ${(i.nodes / 1000).toFixed(0)}k node`;
+        if (!i) return t('ai.idle', { side });
+        return t('ai.stats', {
+            side,
+            depth: i.depth,
+            score: i.score.toFixed(0),
+            sec: (i.elapsed / 1000).toFixed(1),
+            nodes: (i.nodes / 1000).toFixed(0)
+        });
     }
 
     destroy() {

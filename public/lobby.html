@@ -1,9 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Strategy Chess - Lobby</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/imgs/ui/logo.png">
+    <link rel="stylesheet" href="/brand.css">
+    <meta name="description" content="Strategy Chess — epic battles begin">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Strategy Chess">
+    <meta property="og:title" content="Strategy Chess">
+    <meta property="og:description" content="Strategy Chess — epic battles begin">
+    <meta property="og:image" content="/imgs/ui/strategy-chess-og-image.png">
+    <meta property="og:image:alt" content="Strategy Chess">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Strategy Chess">
+    <meta name="twitter:description" content="Strategy Chess — epic battles begin">
+    <meta name="twitter:image" content="/imgs/ui/strategy-chess-og-image.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
@@ -20,20 +34,31 @@
         }
     </script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
-    <div id="lobby-screen" class="container mx-auto px-4 py-8">
+<body class="text-white min-h-screen">
+    <div id="lobby-screen" class="container mx-auto px-3 py-4 pb-24 md:pb-8">
         <!-- Header -->
-        <div class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-yellow-400 mb-2">Strategy Chess - Lobby</h1>
+        <div class="mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <a href="index.html" id="header-back-home" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-1.5 px-3 rounded whitespace-nowrap" data-i18n="nav.back">← Home</a>
+            </div>
+            <div class="text-center">
+            <img src="/imgs/ui/logo.png" alt="Strategy Chess" class="site-logo mx-auto mb-1">
+            <h1 class="text-lg font-bold text-yellow-400 mb-2" data-i18n="lobby.title">Strategy Chess - Lobby</h1>
+            <div class="flex items-center justify-center gap-2 mt-2">
+                <button type="button" data-lang-set="vi" class="px-2 py-1 rounded text-xs font-bold bg-gray-700">VI</button>
+                <button type="button" data-lang-set="en" class="px-2 py-1 rounded text-xs font-bold bg-gray-700">EN</button>
+                <button type="button" data-open-rules class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold px-3 py-1 rounded text-sm" data-i18n="nav.rules">Rules</button>
+            </div>
             <div id="match-info" class="text-lg text-gray-300">
                 <!-- Match info will be populated here -->
+            </div>
             </div>
         </div>
 
         <!-- Players Status -->
         <div class="mb-8">
             <div class="bg-gray-800 rounded-lg p-6">
-                <h2 class="text-xl font-bold text-yellow-400 mb-4">Players Status</h2>
+                <h2 class="text-xl font-bold text-yellow-400 mb-4" data-i18n="lobby.players">Players Status</h2>
                 <div id="players-status" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- Player status will be populated here -->
                 </div>
@@ -43,17 +68,16 @@
         <!-- Team Selection -->
         <div class="mb-8">
             <div class="bg-gray-800 rounded-lg p-6">
-                <h2 class="text-xl font-bold text-yellow-400 mb-6">Select Your Team</h2>
+                <h2 class="text-xl font-bold text-yellow-400 mb-6" data-i18n="lobby.selectTeam">Select Your Team</h2>
                 
                 <!-- Two Column Layout -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-6">
                     <!-- Left Column: Hero Selection -->
                     <div>
-                        <!-- Hero List Section -->
+                        <div id="hero-picked" class="mb-3 min-h-[56px]"></div>
                         <div>
-                            <h3 class="text-lg font-semibold text-blue-300 mb-3">Hero List</h3>
-                            <div id="hero-selection" class="grid grid-cols-3 gap-3">
-                                <!-- Hero cards will be populated by JavaScript -->
+                            <h3 class="text-lg font-semibold text-blue-300 mb-3" data-i18n="lobby.heroList">Hero List</h3>
+                            <div id="hero-selection" class="grid grid-cols-3 gap-2">
                             </div>
                         </div>
                     </div>
@@ -63,7 +87,7 @@
                         <!-- Regular Units Section -->
                         <div>
                             <h3 class="text-lg font-semibold text-blue-300 mb-3">
-                                Regular Units (5 required)
+                                <span data-i18n="lobby.regularUnits">Regular Units (5 required)</span>
                                 <span id="unit-counter" class="text-sm text-blue-200">(0/5)</span>
                             </h3>
                             
@@ -77,7 +101,7 @@
 
                         <!-- Selected Units Slots -->
                         <div>
-                            <h4 class="text-md font-medium text-gray-300 mb-2">Selected Units:</h4>
+                            <h4 class="text-md font-medium text-gray-300 mb-2" data-i18n="lobby.selectedUnits">Selected Units:</h4>
                             <div id="units-selected" class="grid grid-cols-5 gap-2">
                                 <!-- 5 empty slots will be populated by JavaScript -->
                             </div>
@@ -88,20 +112,19 @@
                 <!-- Movement Point Display -->
                 <div class="mb-6 bg-gray-700 rounded-lg p-4">
                     <div class="flex items-center justify-center space-x-3">
-                        <span class="text-lg font-semibold text-yellow-400">Movement Point:</span>
+                        <span class="text-lg font-semibold text-yellow-400" data-i18n="lobby.mp">Movement Point:</span>
                         <div class="flex items-center space-x-2">
                             <span class="text-yellow-400 text-2xl">🦵</span>
                             <span id="movement-point" class="text-2xl font-bold text-yellow-300">0</span>
                         </div>
                     </div>
-                    <div class="text-xs text-gray-400 text-center mt-2">Total speed of selected hero and units</div>
+                    <div class="text-xs text-gray-400 text-center mt-2" data-i18n="lobby.mpHint">Total speed of selected hero and units</div>
                 </div>
 
-                <!-- Ready Button -->
-                <div class="text-center">
-                    <button id="ready-btn" 
-                            class="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors">
-                        Ready
+                <div class="text-center hidden md:block">
+                    <button id="ready-btn"
+                            class="ready-btn bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors">
+                        <span data-i18n="lobby.ready">Ready</span>
                     </button>
                 </div>
             </div>
@@ -110,28 +133,29 @@
         <!-- Chat Section -->
         <div class="bg-gray-800 rounded-lg p-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold text-yellow-400">Lobby Chat</h3>
+                <h3 class="text-xl font-bold text-yellow-400" data-i18n="lobby.chat">Lobby Chat</h3>
                 <div class="flex items-center space-x-4">
                     <span id="online-count" class="text-sm text-gray-300">Online: 0</span>
-                    <button id="toggle-chat" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                    <button id="toggle-chat" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm" data-i18n="lobby.toggleChat">
                         Toggle Chat
                     </button>
                 </div>
             </div>
             
-            <div id="chat-container">
+            <div id="chat-container" class="hidden">
                 <!-- Chat Messages -->
                 <div id="chat-messages" class="bg-gray-900 rounded p-4 h-64 overflow-y-auto mb-4 border border-gray-600">
-                    <div class="text-center text-gray-500 text-sm">Loading messages...</div>
+                    <div class="text-center text-gray-500 text-sm" data-i18n="chat.loading">Loading messages...</div>
                 </div>
                 
                 <!-- Chat Input -->
                 <div class="flex space-x-2">
                     <input type="text" id="chat-input" 
+                           data-i18n-placeholder="home.typeMessage"
                            placeholder="Type your message..." 
                            class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500">
                     <button id="send-message" 
-                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" data-i18n="home.send">
                         Send
                     </button>
                 </div>
@@ -139,9 +163,19 @@
         </div>
 
         <!-- Back to Main Menu -->
-        <div class="text-center mt-8">
+        <div class="text-center mt-6">
             <button id="back-to-main" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
-                ← Back to Main Menu
+                <span data-i18n="lobby.back">← Back to Main Menu</span>
+            </button>
+            <div class="mt-4">
+                <button type="button" data-open-about class="text-yellow-400 hover:text-yellow-300 text-sm font-semibold" data-i18n="about.footer">Legos 2026</button>
+            </div>
+        </div>
+
+        <div class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-gray-900/95 border-t border-gray-700 px-3 py-2" style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom));">
+            <button id="ready-btn-mobile"
+                    class="ready-btn w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg">
+                <span data-i18n="lobby.ready">Ready</span>
             </button>
         </div>
     </div>
@@ -150,8 +184,8 @@
     <div id="loading-screen" class="hidden fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
         <div class="text-center">
             <div class="animate-spin rounded-full h-32 w-32 border-b-2 border-yellow-400 mx-auto mb-4"></div>
-            <h2 class="text-2xl font-bold text-yellow-400 mb-2">Starting Game...</h2>
-            <p class="text-gray-300">All players are ready!</p>
+            <h2 class="text-2xl font-bold text-yellow-400 mb-2" data-i18n="lobby.starting">Starting Game...</h2>
+            <p class="text-gray-300" data-i18n="lobby.allReady">All players are ready!</p>
         </div>
     </div>
 

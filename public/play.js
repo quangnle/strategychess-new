@@ -1,3 +1,6 @@
+import { UNIT_TYPES } from '../core-logic/definitions.js';
+import { t, initI18n } from './i18n.js';
+
 // Multiplayer game client - chỉ render và gửi actions, không xử lý game logic
 let gameSocket = null;
 let chatSocket = null;
@@ -13,6 +16,10 @@ let gameTimer = null;
 
 // Initialize everything after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    initI18n();
+    window.addEventListener('sc:lang', () => {
+        updateTeamPanels();
+    });
     console.log('🎮 Initializing multiplayer game...');
     
     // Get match ID from URL parameters
@@ -310,11 +317,18 @@ async function initializeBattleGraphics(matchInfo) {
             currentUser.userId,
             playerTeam
         );
+
+        const origSelect = battleGraphics.selectUnit.bind(battleGraphics);
+        battleGraphics.selectUnit = (unit) => {
+            origSelect(unit);
+            updateTeamPanels();
+        };
         
         // Initial game state update
         if (gameState) {
             battleGraphics.updateGameState(gameState);
         }
+        updateTeamPanels();
         
         console.log('✨ Battle graphics initialized successfully');
         
@@ -335,14 +349,19 @@ function initializeEventHandlers() {
         });
     }
     
-    // Leave game button
+    // Leave game / header back
+    const confirmLeave = () => {
+        if (confirm('Are you sure you want to leave the game?')) {
+            leaveGame();
+        }
+    };
     const leaveGameBtn = document.getElementById('leave-game-btn');
     if (leaveGameBtn) {
-        leaveGameBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to leave the game?')) {
-                leaveGame();
-            }
-        });
+        leaveGameBtn.addEventListener('click', confirmLeave);
+    }
+    const headerBack = document.getElementById('header-back-home');
+    if (headerBack) {
+        headerBack.addEventListener('click', confirmLeave);
     }
     
     // Game over modal buttons
@@ -532,9 +551,91 @@ function updateGameDisplay() {
 }
 
 
+function unitPortraitMp(unit, asPlayer) {
+    const def = UNIT_TYPES && UNIT_TYPES[unit.armyType || unit.name];
+    const color = asPlayer ? 'blue' : 'red';
+    if (def && def[`image_${color}`]) return def[`image_${color}`];
+    return '';
+}
+
+function effectBadgesHtml(unit) {
+    if (!unit || !unit.effects) return '';
+    const parts = [];
+    if (unit.effects.find(e => e.name === 'lock' && (e.duration === undefined || e.duration > 0))) {
+        parts.push(`<span class="text-[9px] bg-purple-800 text-purple-100 px-1 rounded">${t('ai.lock')}</span>`);
+    }
+    if (unit.effects.some(e => e.name === 'adjacent penalty')) {
+        parts.push(`<span class="text-[9px] bg-red-800 text-red-100 px-1 rounded">${t('ai.noAttack')}</span>`);
+    }
+    if (unit.effects.find(e => e.name === 'dash' && (e.duration === undefined || e.duration > 0))) {
+        parts.push(`<span class="text-[9px] bg-sky-800 text-sky-100 px-1 rounded">${t('ai.dash')}</span>`);
+    }
+    return parts.length ? `<span class="inline-flex gap-0.5">${parts.join('')}</span>` : '';
+}
+
+function fillTeamUnitList(containerId, team, isPlayerTeam) {
+    const list = document.getElementById(containerId);
+    if (!list || !team) return;
+    list.innerHTML = '';
+    const gl = battleGraphics && battleGraphics.gameLogic;
+    (team.units || []).filter(u => u.hp > 0).forEach(unit => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        const selected = battleGraphics && battleGraphics.selectedUnit && battleGraphics.selectedUnit.id === unit.id;
+        row.className = `w-full flex items-center gap-2 rounded px-1.5 py-1 text-left text-xs ${selected ? 'bg-yellow-700/50 ring-1 ring-yellow-400' : 'hover:bg-gray-700'}`;
+        const img = unitPortraitMp(unit, isPlayerTeam);
+        const maxHp = UNIT_TYPES && UNIT_TYPES[unit.name] ? UNIT_TYPES[unit.name].hp : unit.hp;
+        row.innerHTML = `
+            ${img ? `<img src="${img}" alt="" class="w-7 h-7 flex-shrink-0">` : ''}
+            <div class="min-w-0 flex-1">
+                <div class="truncate flex items-center gap-1">${unit.name} ${effectBadgesHtml(unit)}</div>
+                <div class="text-[10px] text-gray-400">HP ${unit.hp}/${maxHp}</div>
+            </div>
+        `;
+        row.addEventListener('click', () => {
+            if (!battleGraphics || unit.name === 'Base') return;
+            if (battleGraphics.canSelectUnit(unit)) battleGraphics.selectUnit(unit);
+        });
+        list.appendChild(row);
+    });
+}
+
 function updateTeamPanels() {
-    // This would show unit status, but for now we'll keep it simple
-    // The detailed unit info is shown in the game board
+    if (!battleGraphics || !battleGraphics.gameLogic || !battleGraphics.gameLogic.matchInfo) return;
+    const mi = battleGraphics.gameLogic.matchInfo;
+    const playerTeamId = battleGraphics.playerTeam;
+    const playerTeam = mi.team1.teamId === playerTeamId ? mi.team1 : mi.team2;
+    const oppTeam = mi.team1.teamId === playerTeamId ? mi.team2 : mi.team1;
+    fillTeamUnitList('player-team-units', playerTeam, true);
+    fillTeamUnitList('opponent-team-units', oppTeam, false);
+
+    const selected = battleGraphics.selectedUnit;
+    const mobileCurrent = document.getElementById('mobile-current-unit');
+    const selectedInfo = document.getElementById('selected-unit-info');
+    const currentHtml = selected
+        ? `<div class="flex items-center gap-2">${unitPortraitMp(selected, selected.teamId === playerTeamId) ? `<img src="${unitPortraitMp(selected, selected.teamId === playerTeamId)}" class="w-8 h-8">` : ''}<div><div class="font-semibold text-sm">${selected.name} ${effectBadgesHtml(selected)}</div><div class="text-xs text-gray-300">HP ${selected.hp}</div></div></div>`
+        : `<div class="text-xs text-gray-500">${t('play.noUnit')}</div>`;
+    if (mobileCurrent) mobileCurrent.innerHTML = currentHtml;
+    if (selectedInfo) selectedInfo.innerHTML = selected ? `${selected.name} HP ${selected.hp}` : '';
+
+    const bar = document.getElementById('mobile-roster');
+    if (!bar) return;
+    bar.innerHTML = '';
+    [playerTeam, oppTeam].forEach((team, idx) => {
+        (team.units || []).filter(u => u.hp > 0 && u.name !== 'Base').forEach(unit => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            const selectedNow = battleGraphics.selectedUnit && battleGraphics.selectedUnit.id === unit.id;
+            btn.className = `flex-shrink-0 rounded p-0.5 ${selectedNow ? 'ring-2 ring-yellow-400' : ''}`;
+            const img = unitPortraitMp(unit, idx === 0);
+            const ring = idx === 0 ? 'border-blue-500' : 'border-red-500';
+            btn.innerHTML = `<img src="${img}" alt="${unit.name}" class="w-9 h-9 border ${ring} rounded">`;
+            btn.addEventListener('click', () => {
+                if (battleGraphics.canSelectUnit(unit)) battleGraphics.selectUnit(unit);
+            });
+            bar.appendChild(btn);
+        });
+    });
 }
 
 function updateEndTurnButton() {
@@ -620,20 +721,19 @@ function showGameOverModal(data) {
         // Determine win reason
         let winReasonText = '';
         if (data.reason === 'opponent_disconnected') {
-            winReasonText = isWinner ? 'Your opponent disconnected!' : 'You disconnected from the game';
+            winReasonText = isWinner ? t('play.oppDisc') : t('play.youDisc');
         } else if (data.reason === 'opponent_left') {
-            winReasonText = isWinner ? 'Your opponent left the game!' : 'You left the game';
+            winReasonText = isWinner ? t('play.oppLeft') : t('play.youLeft');
         } else if (data.winner.reason === 'opponent_forfeit') {
-            winReasonText = isWinner ? 'Your opponent forfeited!' : 'You forfeited';
+            winReasonText = isWinner ? t('play.oppForfeit') : t('play.youForfeit');
         } else {
-            // Normal win by destroying base
-            const winnerName = data.winner.username || (isWinner ? 'You' : 'Your opponent');
-            winReasonText = `${winnerName} destroyed the enemy base!`;
+            const winnerName = data.winner.username || (isWinner ? t('play.youName') : t('play.oppName'));
+            winReasonText = t('play.destroyed', { name: winnerName });
         }
         
         resultText = `
             <div class="text-2xl font-bold ${isWinner ? 'text-green-400' : 'text-red-400'} mb-2">
-                ${isWinner ? '🎉 Victory!' : '💔 Defeat'}
+                ${isWinner ? '🎉 ' + t('play.victory') : '💔 ' + t('play.defeat')}
             </div>
             <div class="text-gray-300 mb-2">
                 ${winReasonText}
@@ -641,8 +741,8 @@ function showGameOverModal(data) {
         `;
     } else {
         resultText = `
-            <div class="text-2xl font-bold text-yellow-400 mb-2">🤝 Draw!</div>
-            <div class="text-gray-300">The game ended in a draw</div>
+            <div class="text-2xl font-bold text-yellow-400 mb-2">🤝 ${t('play.draw')}</div>
+            <div class="text-gray-300">${t('play.drawBody')}</div>
         `;
     }
     

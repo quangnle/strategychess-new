@@ -10,6 +10,7 @@ let currentPlayers = []; // Track current players in lobby
 
 // Import unit definitions
 import { UNIT_TYPES } from '../core-logic/definitions.js';
+import { t, initI18n } from './i18n.js';
 
 // Available heroes and units data (using definitions.js)
 const heroes = [
@@ -71,12 +72,24 @@ const units = [
 
 // Initialize everything after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    initI18n();
+    window.addEventListener('sc:lang', () => {
+        updateReadyButton();
+        updateMatchInfo();
+        if (currentPlayers.length) updatePlayersStatus(currentPlayers);
+        document.querySelectorAll('#units-selected [data-slot-index]').forEach(slot => {
+            if (slot.textContent.includes('Empty') || slot.querySelector('span.text-gray-400')) {
+                const empty = slot.querySelector('span.text-gray-400');
+                if (empty) empty.textContent = t('lobby.empty');
+            }
+        });
+    });
     // Get match ID from URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const matchId = urlParams.get('matchId');
     
     if (!matchId) {
-        alert('No match ID provided');
+        alert(t('lobby.noMatch'));
         window.location.href = 'index.html';
         return;
     }
@@ -101,7 +114,7 @@ function initializeLobby(matchId) {
     // Get user info from localStorage (set when creating/joining match)
     const lobbyUserData = localStorage.getItem('lobbyUser');
     if (!lobbyUserData) {
-        alert('No user data found. Please go back to main menu.');
+        alert(t('lobby.noUser'));
         window.location.href = 'index.html';
         return;
     }
@@ -187,12 +200,12 @@ function initializeLobby(matchId) {
     
     lobbySocket.on('error', (data) => {
         console.error('Lobby error:', data);
-        alert(`Error: ${data.message}`);
+        alert(t('chat.error', { msg: data.message }));
     });
     
     lobbySocket.on('disconnect', () => {
         console.log('Disconnected from lobby server');
-        alert('Disconnected from lobby server');
+        alert(t('lobby.disconnected'));
     });
 }
 
@@ -252,7 +265,7 @@ function initializeChat() {
     chatSocket.on('connect', () => {
         console.log('Connected to chat server');
         if (chatMessages) {
-            chatMessages.innerHTML = '<div class="text-center text-green-500 text-sm">Connected to chat server</div>';
+            chatMessages.innerHTML = `<div class="text-center text-green-500 text-sm">${t('chat.connected')}</div>`;
         }
     });
     
@@ -341,7 +354,7 @@ function initializeChat() {
     
     function updateOnlineCount(count) {
         if (onlineCount) {
-            onlineCount.textContent = `Online: ${count}`;
+            onlineCount.textContent = t('home.online', { n: count });
         }
     }
     
@@ -474,7 +487,7 @@ function initializeUnitSlots() {
         const slot = document.createElement('div');
         slot.className = 'bg-gray-600 rounded border-2 border-dashed border-gray-500 h-16 flex items-center justify-center';
         slot.dataset.slotIndex = i;
-        slot.innerHTML = '<span class="text-gray-400 text-xs">Empty</span>';
+        slot.innerHTML = `<span class="text-gray-400 text-xs">${t('lobby.empty')}</span>`;
         unitsSelected.appendChild(slot);
     }
 }
@@ -501,7 +514,20 @@ function selectHero(hero, card) {
     card.style.backgroundColor = '#2563EB';
     
     selectedHero = hero;
-    
+    const picked = document.getElementById('hero-picked');
+    if (picked && UNIT_TYPES[hero.name]) {
+        const def = UNIT_TYPES[hero.name];
+        picked.innerHTML = `
+            <div class="flex items-center gap-3 bg-gray-900/60 rounded p-2 border border-blue-500">
+                <img src="${hero.image}" alt="" class="w-14 h-14">
+                <div>
+                    <div class="font-bold">${hero.name}</div>
+                    <div class="text-xs text-gray-300 mt-0.5">HP ${def.hp} · Speed ${def.speed} · Range ${def.range}</div>
+                </div>
+            </div>
+        `;
+    }
+
     updateMovementPointDisplay();
     updateReadyButton();
 }
@@ -578,7 +604,7 @@ function reorganizeUnitSlots() {
         if (slot) {
             slot.classList.remove('filled', 'border-solid', 'border-blue-500', 'bg-blue-800');
             slot.classList.add('border-dashed', 'border-gray-500', 'bg-gray-600');
-            slot.innerHTML = '<span class="text-gray-400 text-xs">Empty</span>';
+            slot.innerHTML = `<span class="text-gray-400 text-xs">${t('lobby.empty')}</span>`;
         }
     }
     
@@ -630,44 +656,41 @@ function updateMovementPointDisplay() {
 
 // Update ready button
 function updateReadyButton() {
-    const readyBtn = document.getElementById('ready-btn');
+    const buttons = document.querySelectorAll('.ready-btn');
     const hasSelectedTeam = selectedHero && selectedUnits.length === 5;
     const hasEnoughPlayers = currentPlayers.length >= 2;
     const canReady = hasSelectedTeam && hasEnoughPlayers;
-    
-    readyBtn.disabled = !canReady;
-    
+
+    let text = t('lobby.ready');
+    let cls = 'ready-btn bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
     if (!hasSelectedTeam) {
-        // Need to select team first
-        readyBtn.textContent = 'Select Team First';
-        readyBtn.className = 'bg-gray-600 cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
+        text = t('lobby.selectFirst');
+        cls = 'ready-btn bg-gray-600 cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
     } else if (!hasEnoughPlayers) {
-        // Waiting for opponent
-        readyBtn.textContent = 'Waiting for Opponent...';
-        readyBtn.className = 'bg-yellow-600 cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
-    } else if (canReady && !isReady) {
-        // Ready to play
-        readyBtn.textContent = 'Ready';
-        readyBtn.className = 'bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
+        text = t('lobby.waitOpponent');
+        cls = 'ready-btn bg-yellow-600 cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
     } else if (isReady) {
-        // Currently ready, can toggle to not ready
-        readyBtn.textContent = 'Not Ready';
-        readyBtn.className = 'bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
+        text = t('lobby.notReady');
+        cls = 'ready-btn bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors';
     }
+    buttons.forEach(readyBtn => {
+        readyBtn.disabled = !canReady;
+        readyBtn.textContent = text;
+        readyBtn.className = cls + (readyBtn.id === 'ready-btn-mobile' ? ' w-full' : '');
+    });
 }
 
 // Initialize event handlers
 function initializeEventHandlers() {
     // Ready button
-    const readyBtn = document.getElementById('ready-btn');
-    readyBtn.addEventListener('click', () => {
+    const onReadyClick = () => {
         if (!selectedHero || selectedUnits.length !== 5) {
-            alert('Please select a hero and 5 units first');
+            alert(t('lobby.needTeam'));
             return;
         }
         
         if (currentPlayers.length < 2) {
-            alert('Waiting for opponent to join the lobby');
+            alert(t('lobby.needOpponent'));
             return;
         }
         
@@ -690,15 +713,20 @@ function initializeEventHandlers() {
         });
         
         updateReadyButton();
-    });
+    };
+    document.querySelectorAll('.ready-btn').forEach(btn => btn.addEventListener('click', onReadyClick));
     
     // Back to main menu
-    const backBtn = document.getElementById('back-to-main');
-    backBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to leave the lobby?')) {
+    const goHome = (e) => {
+        if (e) e.preventDefault();
+        if (confirm(t('lobby.leaveConfirm'))) {
             window.location.href = 'index.html';
         }
-    });
+    };
+    const backBtn = document.getElementById('back-to-main');
+    if (backBtn) backBtn.addEventListener('click', goHome);
+    const headerBack = document.getElementById('header-back-home');
+    if (headerBack) headerBack.addEventListener('click', goHome);
 }
 
 // Update match info
@@ -707,7 +735,7 @@ function updateMatchInfo() {
     if (currentMatch) {
         matchInfo.innerHTML = `
             <div class="text-lg font-semibold">${currentMatch.name}</div>
-            <div class="text-sm text-gray-400">Status: ${currentMatch.status}</div>
+            <div class="text-sm text-gray-400">${t('lobby.status', { status: currentMatch.status })}</div>
         `;
     }
 }
@@ -731,16 +759,16 @@ function updatePlayersStatus(players) {
             <div class="flex items-center justify-between mb-2">
                 <div class="font-medium text-white">${player.username}</div>
                 <div class="flex items-center space-x-2">
-                    ${player.isCreator ? '<span class="bg-yellow-600 text-yellow-100 px-2 py-1 rounded text-xs">Creator</span>' : ''}
-                    ${isCurrentUser ? '<span class="bg-blue-600 text-blue-100 px-2 py-1 rounded text-xs">You</span>' : ''}
+                    ${player.isCreator ? `<span class="bg-yellow-600 text-yellow-100 px-2 py-1 rounded text-xs">${t('lobby.creator')}</span>` : ''}
+                    ${isCurrentUser ? `<span class="bg-blue-600 text-blue-100 px-2 py-1 rounded text-xs">${t('lobby.you')}</span>` : ''}
                 </div>
             </div>
             <div class="space-y-1">
                 <div class="text-sm text-gray-300">
-                    Team: ${player.hasTeam ? 'Selected' : 'Not Selected'}
+                    ${t('lobby.team', { state: player.hasTeam ? t('lobby.teamYes') : t('lobby.teamNo') })}
                 </div>
                 <div class="text-sm text-gray-300">
-                    Ready: ${player.isReady ? '<span class="text-green-400">Yes</span>' : '<span class="text-red-400">No</span>'}
+                    ${t('lobby.readyLabel', { state: player.isReady ? `<span class="text-green-400">${t('lobby.yes')}</span>` : `<span class="text-red-400">${t('lobby.no')}</span>` })}
                 </div>
             </div>
         `;

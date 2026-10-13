@@ -1,4 +1,5 @@
 import { BOARD_COLS, BOARD_ROWS, UNIT_TYPES, SACRIFICE, HEAL } from '/core-logic/definitions.js';
+import { t } from './i18n.js';
 import MatchInfo from '/core-logic/match-info.js';
 import GameLogic from '/core-logic/game-logic.js';
 import Processor from '/ai-processor/processor.js';
@@ -69,7 +70,8 @@ class P5BattleGraphics {
         const availW = parent && parent.clientWidth > 40 ? parent.clientWidth : 550;
         const availH = parent && parent.clientHeight > 40 ? parent.clientHeight : 600;
         const cell = Math.floor(Math.min(availW / BOARD_COLS, availH / BOARD_ROWS));
-        this.cellSize = Math.max(32, cell);
+        const minCell = (typeof window !== 'undefined' && window.innerWidth < 768) ? 22 : 32;
+        this.cellSize = Math.max(minCell, cell);
         this.boardWidth = BOARD_COLS * this.cellSize;
         this.boardHeight = BOARD_ROWS * this.cellSize;
         this.canvasWidth = this.boardWidth;
@@ -95,15 +97,18 @@ class P5BattleGraphics {
                 });
                 
                 // Setup click event
-                canvas.mousePressed(() => {
-                    // kiểm tra nếu game đã kết thúc
+                const onCanvasPress = () => {
                     const result = this.gameLogic.isGameEnd();
                     if (result !== 0) {
                         this.drawGameEndInfoBoard(result);
                         return;
                     }
-
                     this.handleCanvasClick(p.mouseX, p.mouseY);
+                };
+                canvas.mousePressed(onCanvasPress);
+                canvas.touchStarted(() => {
+                    onCanvasPress();
+                    return false;
                 });
                 
                 // Setup keyboard event
@@ -314,6 +319,12 @@ class P5BattleGraphics {
             this.p.fill(255, 255, 255, 128); // 50% transparent white
             this.p.text('⛔', x + 8, y + this.cellSize - 8);
         }
+
+        const dashEffect = unit.effects.find(e => e.name === 'dash');
+        if (dashEffect && (dashEffect.duration === undefined || dashEffect.duration > 0)) {
+            this.p.fill(255, 255, 255, 128);
+            this.p.text('💨', x + this.cellSize / 2, y + this.cellSize - 8);
+        }
     }
 
     drawArrowIndicator(fromCell, toCell, color) {
@@ -429,36 +440,41 @@ class P5BattleGraphics {
     }
 
     drawGameEndInfoBoard(result) {
-        // Draw game end info board on the center of the canvas
         const panelX = this.offsetX;
         const panelY = this.offsetY;
         const panelWidth = this.boardWidth;
         const panelHeight = this.boardHeight;
 
-        // Panel background
-        this.p.fill(0, 0, 0, 204);
+        this.p.fill(0, 0, 0, 180);
         this.p.noStroke();
         this.p.rect(panelX, panelY, panelWidth, panelHeight);
 
-        // Panel border
-        this.p.stroke(102);
-        this.p.strokeWeight(2);
-        this.p.noFill();
-        this.p.rect(panelX, panelY, panelWidth, panelHeight);
+        const winnerKey = result === 1 ? 'Base_blue' : result === 2 ? 'Base_red' : null;
+        const img = winnerKey ? this.images[winnerKey] : null;
+        const cx = panelX + panelWidth / 2;
+        const cy = panelY + panelHeight / 2;
+        if (img) {
+            const size = Math.min(panelWidth, panelHeight) * 0.28;
+            this.p.image(img, cx - size / 2, cy - size - 8, size, size);
+        }
 
-        // Title
         this.p.fill(255);
-        this.p.textSize(24);
+        this.p.noStroke();
+        this.p.textSize(Math.max(16, this.cellSize * 0.55));
         this.p.textStyle(this.p.BOLD);
         this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.text('Game End', panelX + panelWidth / 2, panelY + panelHeight / 2 - 20);
+        this.p.text(t('end.gameEnd'), cx, cy + 8);
 
-        // Draw game end info
-        const labelText = result === 1 ? 'Team 1 wins!' : result === 2 ? 'Team 2 wins!' : 'Draw!';
-        this.p.fill(255);
-        this.p.textSize(18);
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.text(labelText, panelX + panelWidth / 2, panelY + panelHeight / 2 + 20);
+        const labelText = result === 1 ? t('end.blueWins') : result === 2 ? t('end.redWins') : t('end.draw');
+        this.p.fill(result === 1 ? this.p.color(96, 165, 250) : result === 2 ? this.p.color(248, 113, 113) : 255);
+        this.p.textSize(Math.max(14, this.cellSize * 0.4));
+        this.p.text(labelText, cx, cy + 36);
+    }
+
+    resizeBoard() {
+        if (!this.p) return;
+        this.layoutBoard();
+        this.p.resizeCanvas(this.canvasWidth, this.canvasHeight);
     }
     
     canSelectUnit(unit) {
