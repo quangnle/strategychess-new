@@ -36,6 +36,40 @@ async function loadDefinitions() {
     }
 }
 
+const ABILITY_KEYS = {
+    berserk: 'berserk',
+    lock: 'lock',
+    'adjacent penalty': 'adjacent',
+    'wind walk': 'windwalk',
+    suicide: 'suicide',
+    heal: 'heal',
+    sacrifice: 'sacrifice'
+};
+
+function unitAbilityKeys(unit) {
+    const keys = [];
+    (unit.abilities || []).forEach(name => {
+        const key = ABILITY_KEYS[name];
+        if (key && !keys.includes(key)) keys.push(key);
+    });
+    if (unit.name === 'Trarex') keys.push('trarex');
+    return keys;
+}
+
+function unitSkillText(unit) {
+    return unitAbilityKeys(unit).map(key => t(`ai.skill.${key}`)).join(' ');
+}
+
+function unitSkillNames(unit) {
+    return unitAbilityKeys(unit).map(key => t(`ai.skillName.${key}`)).join(' · ');
+}
+
+function unitStatsLine(unit) {
+    let line = `❤ ${unit.hp}  🦵 ${unit.speed}  ⚔ ${unit.range}`;
+    if (unit.magicRange > 0) line += `  🔮 ${unit.magicRange}`;
+    return line;
+}
+
 // Team state management
 class TeamManager {
     constructor(teamColor) {
@@ -83,12 +117,13 @@ class TeamManager {
             const card = document.createElement('div');
             card.className = `bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-${this.teamColor}-400 rounded p-1 cursor-pointer`;
             card.dataset.hero = heroName;
-            card.title = `${heroName}  HP ${hero.hp}  Speed ${hero.speed}  Range ${hero.range}`;
+            card.title = `${heroName}  ${unitStatsLine(hero)}  ${unitSkillText(hero)}`;
             
             card.innerHTML = `
                 <div class="text-center">
                     <img src="${hero[`image_${this.teamColor}`]}" alt="${heroName}" class="w-12 h-12 mx-auto">
                     <div class="text-[10px] leading-tight font-semibold text-gray-200 truncate">${heroName}</div>
+                    <div class="text-[9px] leading-tight text-yellow-300/90 truncate">${unitSkillNames(hero) || '—'}</div>
                 </div>
             `;
             
@@ -120,14 +155,21 @@ class TeamManager {
             }
             
             const card = document.createElement('div');
-            card.className = `bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-${this.teamColor}-400 rounded p-1 cursor-pointer`;
+            card.className = `pick-card bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-${this.teamColor}-400 rounded cursor-pointer`;
             card.dataset.unit = unitName;
-            card.title = `${unitName}  HP ${unit.hp}  Speed ${unit.speed}  Range ${unit.range}`;
+            card.title = `${unitName}  ${unitStatsLine(unit)}  ${unitSkillText(unit)}`;
             
             card.innerHTML = `
                 <div class="text-center">
-                    <img src="${unit[`image_${this.teamColor}`]}" alt="${unitName}" class="w-10 h-10 mx-auto">
-                    <div class="text-[10px] leading-tight font-semibold text-gray-200">${unitName}</div>
+                    <img src="${unit[`image_${this.teamColor}`]}" alt="${unitName}">
+                    <div class="pick-name text-gray-200">${unitName}</div>
+                    <div class="pick-stats text-gray-300">
+                        <span><span class="text-red-400">❤</span><span class="text-red-400">${unit.hp}</span></span>
+                        <span><span class="text-yellow-400">🦵</span><span class="text-yellow-400">${unit.speed}</span></span>
+                        <span><span class="text-orange-400">⚔</span><span class="text-orange-400">${unit.range}</span></span>
+                        ${unit.magicRange > 0 ? `<span><span class="text-purple-400">🔮</span><span class="text-purple-400">${unit.magicRange}</span></span>` : ''}
+                    </div>
+                    <div class="text-[9px] leading-tight text-yellow-300/90 mt-0.5 truncate">${unitSkillNames(unit) || ''}</div>
                 </div>
             `;
             
@@ -167,12 +209,15 @@ class TeamManager {
         }
         const hero = UNIT_TYPES[this.selectedHero];
         const img = hero[`image_${this.teamColor}`];
+        const magic = hero.magicRange > 0 ? ` · 🔮 ${hero.magicRange}` : '';
+        const skills = unitSkillText(hero);
         el.innerHTML = `
-            <div class="flex items-center gap-3 bg-gray-900/50 rounded p-2 border border-${this.teamColor}-500">
+            <div class="flex items-start gap-3 bg-gray-900/50 rounded p-2 border border-${this.teamColor}-500">
                 <img src="${img}" alt="" class="w-14 h-14 flex-shrink-0">
-                <div>
+                <div class="min-w-0">
                     <div class="font-bold text-sm">${hero.name}</div>
-                    <div class="text-xs text-gray-300 mt-0.5">HP ${hero.hp} · Speed ${hero.speed} · Range ${hero.range}</div>
+                    <div class="text-xs text-gray-300 mt-0.5">❤ ${hero.hp} · 🦵 ${hero.speed} · ⚔ ${hero.range}${magic}</div>
+                    ${skills ? `<div class="text-[11px] text-yellow-200/95 mt-1 leading-snug"><span class="font-semibold">${t('ai.skill')}:</span> ${skills}</div>` : ''}
                 </div>
             </div>
         `;
@@ -300,8 +345,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('sc:lang', () => {
         applyMobilePickStep();
         if (window.teamManagers) {
-            window.teamManagers.blue.renderPickedHero();
-            window.teamManagers.red.renderPickedHero();
+            window.teamManagers.blue.renderHeroSelection();
+            window.teamManagers.red.renderHeroSelection();
+            window.teamManagers.blue.renderUnitSelection();
+            window.teamManagers.red.renderUnitSelection();
+            window.teamManagers.blue.paintHeroSelection();
+            window.teamManagers.red.paintHeroSelection();
         }
         if (battleGraphics) {
             updateAiStatusLine(battleGraphics.ai);
