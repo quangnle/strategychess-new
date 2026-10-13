@@ -1,8 +1,8 @@
 // Web Worker chạy bộ tìm kiếm.
 //
-// Bắt buộc phải tách luồng: engine nghĩ 5-10 giây, chạy trên luồng chính thì p5
-// đứng hình và người chơi tưởng game treo. Ở worker thì bàn cờ vẫn vẽ mượt và ta
-// hiện được tiến độ "đang nghĩ ở độ sâu mấy".
+// Bắt buộc phải tách luồng: engine nghĩ 5-10 giây, chạy trên luồng chính thì
+// vòng canvas đứng hình và người chơi tưởng game treo. Ở worker thì bàn cờ vẫn
+// vẽ mượt và ta hiện được tiến độ "đang nghĩ ở độ sâu mấy".
 //
 // Nạp bằng: new Worker('/ai-processor/ai-worker.js', { type: 'module' })
 

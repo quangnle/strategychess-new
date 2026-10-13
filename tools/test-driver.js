@@ -3,7 +3,7 @@
 // Trình duyệt sandbox của công cụ không mở được localhost ở tab chính, nên phần
 // tích hợp UI được kiểm bằng cách nạp thẳng public/ai-driver.js và
 // ai-processor/ai-worker.js vào Node, với Worker giả nối hai bên lại với nhau.
-// Thứ duy nhất không kiểm ở đây là p5 vẽ ra pixel.
+// Thứ duy nhất không kiểm ở đây là canvas vẽ ra pixel.
 //
 //   node tools/test-driver.js
 
@@ -112,7 +112,7 @@ async function main() {
     const startPositions = snapshotPositions(gl);
     const startUnits = gl._getAllUnits().filter(u => u.hp > 0).length;
 
-    // Vòng lặp này thay cho draw() của p5: gọi tick() lặp đi lặp lại, không có
+    // Vòng lặp này thay cho vòng canvas: gọi tick() lặp đi lặp lại, không có
     // bất kỳ input nào của người chơi.
     let ticks = 0;
     const t0 = Date.now();

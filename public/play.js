@@ -301,7 +301,7 @@ async function initializeBattleGraphics(matchInfo) {
         console.log('🎨 Initializing battle graphics...');
         
         // Import the multiplayer graphics module
-        const graphicsModule = await import('./p5-battle-sketch-multiplayer.js');
+        const graphicsModule = await import('./battle-sketch-multiplayer.js');
         const P5BattleGraphicsMultiplayer = graphicsModule.default;
         
         // Determine player's team for perspective
@@ -512,6 +512,10 @@ function leaveGame() {
     
     // Cleanup
     stopGameTimer();
+    if (battleGraphics && battleGraphics.destroy) {
+        battleGraphics.destroy();
+        battleGraphics = null;
+    }
     
     // Redirect after a short delay
     setTimeout(() => {

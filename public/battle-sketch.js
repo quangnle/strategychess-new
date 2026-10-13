@@ -4,19 +4,17 @@ import MatchInfo from '/core-logic/match-info.js';
 import GameLogic from '/core-logic/game-logic.js';
 import Processor from '/ai-processor/processor.js';
 import { AIDriver, AI_MODE } from './ai-driver.js';
+import { mountCanvas, loadImages, drawImage, rgba, fillTriangle, strokeCircle } from './canvas-2d.js';
 
-class P5BattleGraphics {
+class BattleGraphics {
     constructor(matchInfo, aiOptions = {}) {
         this.matchInfo = MatchInfo.createNewMatch(matchInfo.matchId, matchInfo.matchName, matchInfo.team1, matchInfo.team2);
-        
-        // Initialize game logic
+
         this.gameLogic = new GameLogic(this.matchInfo);
         this.gameLogic.startMatch();
-        
-        // Processor cũ giữ lại làm đối chứng, không còn điều khiển ván đấu
+
         this.processor = new Processor(this.gameLogic);
 
-        // Engine minimax chạy trong Web Worker
         this.onHudUpdate = aiOptions.onHudUpdate || (() => {});
         this.ai = new AIDriver(this.gameLogic, {
             mode: aiOptions.mode || AI_MODE.OFF,
@@ -28,8 +26,6 @@ class P5BattleGraphics {
             }
         });
 
-        // Canvas chỉ vẽ bàn cờ. HUD (team, AI status, quân đang chọn) nằm ở HTML
-        // hai bên và trên header để tận dụng chiều ngang màn hình.
         this.topPanelHeight = 0;
         this.canvasWidth = 550;
         this.canvasHeight = 600;
@@ -39,20 +35,16 @@ class P5BattleGraphics {
         this.offsetX = 0;
         this.offsetY = 0;
         this._hudKey = '';
-        this.p5Instance = null;
-        
-        // Load images
+        this.host = null;
+        this.ctx = null;
         this.images = {};
-        this.loadImages();
-        
-        // Initialize p5 sketch
-        this.initP5Sketch();
-
         this.recentActions = [];
+
+        this.loadImagePaths();
+        this.initCanvas();
     }
-    
-    loadImages() {
-        // Images will be loaded in the p5 setup function
+
+    loadImagePaths() {
         this.imagePaths = {};
         Object.keys(UNIT_TYPES).forEach(unitType => {
             const unitData = UNIT_TYPES[unitType];
@@ -64,7 +56,7 @@ class P5BattleGraphics {
             }
         });
     }
-    
+
     layoutBoard() {
         const parent = document.getElementById('battle-canvas-container');
         const availW = parent && parent.clientWidth > 40 ? parent.clientWidth : 550;
@@ -81,73 +73,56 @@ class P5BattleGraphics {
         this.topPanelHeight = 0;
     }
 
-    initP5Sketch() {
-        const sketch = (p) => {
-            this.p = p;
-            
-            p.setup = () => {
-                this.layoutBoard();
-                const canvas = p.createCanvas(this.canvasWidth, this.canvasHeight);
-                canvas.parent('battle-canvas-container');
-                
-                // Load images in p5 context
-                this.images = {};
-                Object.keys(this.imagePaths).forEach(key => {
-                    this.images[key] = p.loadImage(this.imagePaths[key]);
-                });
-                
-                // Setup click event
-                const onCanvasPress = () => {
-                    const result = this.gameLogic.isGameEnd();
-                    if (result !== 0) {
-                        this.drawGameEndInfoBoard(result);
-                        return;
-                    }
-                    this.handleCanvasClick(p.mouseX, p.mouseY);
-                };
-                canvas.mousePressed(onCanvasPress);
-                canvas.touchStarted(() => {
-                    onCanvasPress();
-                    return false;
-                });
-                
-                // Setup keyboard event
-                p.keyPressed = () => {
-                    // kiểm tra nếu game đã kết thúc
-                    const result = this.gameLogic.isGameEnd();
-                    if (result !== 0) {
-                        this.drawGameEndInfoBoard(result);
-                        return;
-                    }
+    initCanvas() {
+        this.host = mountCanvas('battle-canvas-container');
+        this.ctx = this.host.ctx;
+        this.layoutBoard();
+        this.host.setCssSize(this.canvasWidth, this.canvasHeight);
 
-                    this.handleKeyPress(p.key);
-                };
+        this.images = loadImages(this.imagePaths);
 
-                p.windowResized = () => {
-                    this.layoutBoard();
-                    p.resizeCanvas(this.canvasWidth, this.canvasHeight);
-                };
-
-                // layout lần đầu có thể chạy trước khi flex đã có kích thước thật
-                requestAnimationFrame(() => {
-                    this.layoutBoard();
-                    p.resizeCanvas(this.canvasWidth, this.canvasHeight);
-                });
-            };
-            
-            p.draw = () => {
-                this.draw();
-            };
+        this._onPointer = (e) => {
+            e.preventDefault();
+            const result = this.gameLogic.isGameEnd();
+            if (result !== 0) {
+                this.drawGameEndInfoBoard(result);
+                return;
+            }
+            const { x, y } = this.host.eventToLocal(e);
+            this.handleCanvasClick(x, y);
         };
-        
-        this.p5Instance = new p5(sketch);
+        this.host.canvas.addEventListener('pointerdown', this._onPointer);
+
+        this._onKey = (e) => {
+            const result = this.gameLogic.isGameEnd();
+            if (result !== 0) {
+                this.drawGameEndInfoBoard(result);
+                return;
+            }
+            this.handleKeyPress(e.key);
+        };
+        this.host.canvas.addEventListener('keydown', this._onKey);
+
+        this._onResize = () => {
+            this.layoutBoard();
+            this.host.setCssSize(this.canvasWidth, this.canvasHeight);
+        };
+        window.addEventListener('resize', this._onResize);
+
+        requestAnimationFrame(() => {
+            if (!this.host) return;
+            this.layoutBoard();
+            this.host.setCssSize(this.canvasWidth, this.canvasHeight);
+        });
+
+        this.host.startLoop(() => this.draw());
     }
-    
+
     draw() {
-        // Clear canvas with background
-        this.p.background(51); // Dark gray background
-        
-        // kiểm tra nếu game đã kết thúc
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(51);
+        ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+
         const result = this.gameLogic.isGameEnd();
         if (result !== 0) {
             this.drawGameEndInfoBoard(result);
@@ -155,8 +130,6 @@ class P5BattleGraphics {
             return;
         }
 
-        // Cho AI cơ hội đi, nếu nó đang điều khiển phe tới lượt. Việc tính toán nằm
-        // ở worker nên lời gọi này trả về ngay, khung hình không bị khựng.
         if (this.ai) this.ai.tick();
 
         this.drawBoard();
@@ -188,248 +161,198 @@ class P5BattleGraphics {
     }
 
     drawBoard() {
-        // Draw alternating squares
+        const ctx = this.ctx;
         for (let row = 0; row < BOARD_ROWS; row++) {
             for (let col = 0; col < BOARD_COLS; col++) {
                 const x = this.offsetX + col * this.cellSize;
                 const y = this.offsetY + row * this.cellSize;
-                
-                // Alternate colors: white and light gray
                 const isEven = (row + col) % 2 === 0;
-                this.p.fill(isEven ? 255 : 240);
-                
-                this.p.rect(x, y, this.cellSize, this.cellSize);
-                
-                // Draw border
-                this.p.stroke(204);
-                this.p.strokeWeight(1);
-                this.p.noFill();
-                this.p.rect(x, y, this.cellSize, this.cellSize);
-
-                // Draw coordinate
-                //this.p.fill(34);
-                //this.p.textSize(8);
-                //this.p.textAlign(this.p.CENTER, this.p.CENTER);
-                //this.p.text(`${row},${col}`, x + this.cellSize / 2, y + this.cellSize / 2);
+                ctx.fillStyle = isEven ? rgba(255) : rgba(240);
+                ctx.fillRect(x, y, this.cellSize, this.cellSize);
+                ctx.strokeStyle = rgba(204);
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x + 0.5, y + 0.5, this.cellSize - 1, this.cellSize - 1);
             }
         }
     }
-    
+
     drawUnits() {
         if (!this.matchInfo || !this.matchInfo.team1 || !this.matchInfo.team2) {
             console.error('MatchInfo not properly initialized');
             return;
         }
-        
-        // Draw team 1 units (Blue team - bottom) - only alive units
         this.drawTeamUnits(this.matchInfo.team1, true);
-        
-        // Draw team 2 units (Red team - top) - only alive units
         this.drawTeamUnits(this.matchInfo.team2, false);
     }
-    
+
     drawTeamUnits(team, isBlueTeam) {
         if (!team || !team.units) {
             console.error('Team units not found');
             return;
         }
-        
-        // Filter out dead units (HP <= 0)
         const aliveUnits = team.units.filter(unit => unit.hp > 0);
-        
         aliveUnits.forEach(unit => {
             if (unit && unit.row !== undefined && unit.col !== undefined) {
                 this.drawUnit(unit, isBlueTeam);
             }
         });
     }
-    
+
     drawUnit(unit, isBlueTeam) {
+        const ctx = this.ctx;
         const x = this.offsetX + unit.col * this.cellSize;
         const y = this.offsetY + unit.row * this.cellSize;
-        
-        // Check if this unit can be selected (belongs to current turn team and not ended turn)
-        const canBeSelected = unit.teamId === this.gameLogic.currentTurnTeamId && 
+
+        const canBeSelected = unit.teamId === this.gameLogic.currentTurnTeamId &&
                              !this.gameLogic.alreadyEndedTurnUnits.includes(unit) &&
                              unit.name !== "Base";
-        
-        // Draw selection highlight if unit can be selected
+
         if (canBeSelected) {
-            this.p.stroke(0, 255, 0); // Green border
-            this.p.strokeWeight(2);
-            this.p.noFill();
-            this.p.rect(x, y, this.cellSize, this.cellSize);
+            ctx.strokeStyle = rgba(0, 255, 0);
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, this.cellSize, this.cellSize);
         }
-        
-        // Get unit image
+
         const unitType = unit.armyType || unit.name;
         const imageKey = `${unitType}_${isBlueTeam ? 'blue' : 'red'}`;
-        
+
         if (this.images[imageKey]) {
-            // Calculate image size (80% of cell size)
             const imgSize = this.cellSize * 0.8;
             const imgX = x + (this.cellSize - imgSize) / 2;
             const imgY = y + (this.cellSize - imgSize) / 2;
-            
-            this.p.image(this.images[imageKey], imgX, imgY, imgSize, imgSize);
-            
-            // Draw HP bar
+            drawImage(ctx, this.images[imageKey], imgX, imgY, imgSize, imgSize);
             this.drawHPBar(unit, x, y, isBlueTeam);
-            
-            // Draw effect indicators
             this.drawEffectIndicators(unit, x, y);
         }
     }
-    
+
     drawHPBar(unit, x, y, isBlueTeam) {
+        const ctx = this.ctx;
         const barWidth = this.cellSize * 0.8;
         const barHeight = 4;
         const barX = x + (this.cellSize - barWidth) / 2;
         const barY = y + 2;
-        
-        // Background
-        this.p.fill(102);
-        this.p.noStroke();
-        this.p.rect(barX, barY, barWidth, barHeight);
-        
-        // HP bar
+
+        ctx.fillStyle = rgba(102);
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
         const hpPercentage = unit.hp / (UNIT_TYPES[unit.armyType]?.hp || 5);
         const hpWidth = barWidth * hpPercentage;
-        
-        this.p.fill(isBlueTeam ? this.p.color(0, 0, 255) : this.p.color(255, 0, 0));
-        this.p.rect(barX, barY, hpWidth, barHeight);
+        ctx.fillStyle = isBlueTeam ? rgba(0, 0, 255) : rgba(255, 0, 0);
+        ctx.fillRect(barX, barY, hpWidth, barHeight);
     }
-    
+
     drawEffectIndicators(unit, x, y) {
         if (!unit.effects || unit.effects.length === 0) return;
-        
-        this.p.textSize(8);
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        
-        // Check for lock effect - draw in bottom right corner
+        const ctx = this.ctx;
+        ctx.font = '8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = rgba(255, 255, 255, 128);
+
         const lockEffect = unit.effects.find(e => e.name === 'lock');
         if (lockEffect && (lockEffect.duration === undefined || lockEffect.duration > 0)) {
-            this.p.fill(255, 255, 255, 128); // 50% transparent white
-            this.p.text('🔒', x + this.cellSize - 8, y + this.cellSize - 8);
+            ctx.fillText('🔒', x + this.cellSize - 8, y + this.cellSize - 8);
         }
-        
-        // Check for adjacent penalty effect - draw in bottom left corner
+
         const adjacentEffect = unit.effects.find(e => e.name === 'adjacent penalty');
         if (adjacentEffect) {
-            this.p.fill(255, 255, 255, 128); // 50% transparent white
-            this.p.text('⛔', x + 8, y + this.cellSize - 8);
+            ctx.fillText('⛔', x + 8, y + this.cellSize - 8);
         }
 
         const dashEffect = unit.effects.find(e => e.name === 'dash');
         if (dashEffect && (dashEffect.duration === undefined || dashEffect.duration > 0)) {
-            this.p.fill(255, 255, 255, 128);
-            this.p.text('💨', x + this.cellSize / 2, y + this.cellSize - 8);
+            ctx.fillText('💨', x + this.cellSize / 2, y + this.cellSize - 8);
         }
     }
 
     drawArrowIndicator(fromCell, toCell, color) {
+        const ctx = this.ctx;
         const x1 = this.offsetX + fromCell.col * this.cellSize + this.cellSize / 2;
         const y1 = this.offsetY + fromCell.row * this.cellSize + this.cellSize / 2;
         const x2 = this.offsetX + toCell.col * this.cellSize + this.cellSize / 2;
         const y2 = this.offsetY + toCell.row * this.cellSize + this.cellSize / 2;
 
-        this.p.stroke(color);
-        this.p.strokeWeight(2);
-        this.p.line(x1, y1, x2, y2);
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
 
-        // Draw arrowhead
         const angle = Math.atan2(y2 - y1, x2 - x1);
         const arrowSize = 10;
         const x3 = x2 - arrowSize * Math.cos(angle - Math.PI / 6);
         const y3 = y2 - arrowSize * Math.sin(angle - Math.PI / 6);
         const x4 = x2 - arrowSize * Math.cos(angle + Math.PI / 6);
         const y4 = y2 - arrowSize * Math.sin(angle + Math.PI / 6);
-        
-        this.p.fill(color);
-        this.p.triangle(x2, y2, x3, y3, x4, y4);
+        fillTriangle(ctx, x2, y2, x3, y3, x4, y4);
     }
 
     drawStayMarker(cell) {
         if (!cell) return;
+        const ctx = this.ctx;
         const x = this.offsetX + cell.col * this.cellSize + this.cellSize / 2;
         const y = this.offsetY + cell.row * this.cellSize + this.cellSize / 2;
-        this.p.noFill();
-        this.p.stroke(120, 180, 255, 200);
-        this.p.strokeWeight(3);
-        this.p.circle(x, y, this.cellSize * 0.7);
+        ctx.strokeStyle = rgba(120, 180, 255, 200);
+        ctx.lineWidth = 3;
+        strokeCircle(ctx, x, y, this.cellSize * 0.7);
     }
-    
+
     highlightReachableCells() {
         if (!this.gameLogic.currentTurnUnit) return;
-        
         const currentUnit = this.gameLogic.currentTurnUnit;
         if (!currentUnit || currentUnit.hp <= 0) return;
 
-        // Get reachable cells for movement
-        const reachableCells = this.gameLogic.getReachableCells(currentUnit);
-        this.highlightCells(reachableCells, this.p.color(144, 238, 144, 153), 'movable'); // Light green for movable
-
-        // Get attackable targets
-        const attackableTargets = this.gameLogic.getAttackableTargets(currentUnit);
-        this.highlightCells(attackableTargets, this.p.color(255, 99, 71, 153), 'attackable'); // Light red for attackable
-
-        // Get healable targets
-        const healableTargets = this.gameLogic.getHealableTargets(currentUnit);
-        this.highlightCells(healableTargets, this.p.color(173, 216, 230, 153), 'healable'); // Light blue for healable
-
-        // Get sacrificeable targets
-        const sacrificeableTargets = this.gameLogic.getSacrificeableTargets(currentUnit);
-        this.highlightCells(sacrificeableTargets, this.p.color(255, 255, 224, 153), 'sacrificeable'); // Light yellow for sacrificeable
+        this.highlightCells(this.gameLogic.getReachableCells(currentUnit), rgba(144, 238, 144, 153), 'movable');
+        this.highlightCells(this.gameLogic.getAttackableTargets(currentUnit), rgba(255, 99, 71, 153), 'attackable');
+        this.highlightCells(this.gameLogic.getHealableTargets(currentUnit), rgba(173, 216, 230, 153), 'healable');
+        this.highlightCells(this.gameLogic.getSacrificeableTargets(currentUnit), rgba(255, 255, 224, 153), 'sacrificeable');
     }
 
     highlightCells(cells, color, type) {
+        const ctx = this.ctx;
         cells.forEach(cell => {
             const x = this.offsetX + cell.col * this.cellSize;
             const y = this.offsetY + cell.row * this.cellSize;
-            
-            // Fill the cell with the highlight color
-            this.p.fill(color);
-            this.p.noStroke();
-            this.p.rect(x, y, this.cellSize, this.cellSize);
-            
-            // Add a subtle border to distinguish the highlight
-            this.p.stroke(this.getBorderColorForType(type));
-            this.p.strokeWeight(2);
-            this.p.noFill();
-            this.p.rect(x, y, this.cellSize, this.cellSize);
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, this.cellSize, this.cellSize);
+            ctx.strokeStyle = this.getBorderColorForType(type);
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, this.cellSize, this.cellSize);
         });
     }
 
     getBorderColorForType(type) {
         switch (type) {
             case 'movable':
-                return this.p.color(34, 139, 34); // Forest green
+                return rgba(34, 139, 34);
             case 'attackable':
-                return this.p.color(220, 20, 60); // Crimson
+                return rgba(220, 20, 60);
             case 'healable':
-                return this.p.color(65, 105, 225); // Royal blue
+                return rgba(65, 105, 225);
             case 'sacrificeable':
-                return this.p.color(218, 165, 32); // Goldenrod
+                return rgba(218, 165, 32);
             default:
-                return this.p.color(102, 102, 102);
+                return rgba(102, 102, 102);
         }
     }
-    
 
     drawRecentActions() {
         this.recentActions.forEach(action => {
             switch (action.type) {
                 case 'move':
-                    this.drawArrowIndicator(action.from, action.to, this.p.color(0, 255, 0, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(0, 255, 0, 128));
                     break;
                 case 'attack':
-                    this.drawArrowIndicator(action.from, action.to, this.p.color(255, 0, 0, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(255, 0, 0, 128));
                     break;
                 case 'heal':
-                    this.drawArrowIndicator(action.from, action.to, this.p.color(0, 0, 255, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(0, 0, 255, 128));
                     break;
                 case 'sacrifice':
-                    this.drawArrowIndicator(action.from, action.to, this.p.color(255, 255, 0, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(255, 255, 0, 128));
                     break;
                 case 'stay':
                 case 'pass':
@@ -440,14 +363,14 @@ class P5BattleGraphics {
     }
 
     drawGameEndInfoBoard(result) {
+        const ctx = this.ctx;
         const panelX = this.offsetX;
         const panelY = this.offsetY;
         const panelWidth = this.boardWidth;
         const panelHeight = this.boardHeight;
 
-        this.p.fill(0, 0, 0, 180);
-        this.p.noStroke();
-        this.p.rect(panelX, panelY, panelWidth, panelHeight);
+        ctx.fillStyle = rgba(0, 0, 0, 180);
+        ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
 
         const winnerKey = result === 1 ? 'Base_blue' : result === 2 ? 'Base_red' : null;
         const img = winnerKey ? this.images[winnerKey] : null;
@@ -455,30 +378,29 @@ class P5BattleGraphics {
         const cy = panelY + panelHeight / 2;
         if (img) {
             const size = Math.min(panelWidth, panelHeight) * 0.28;
-            this.p.image(img, cx - size / 2, cy - size - 8, size, size);
+            drawImage(ctx, img, cx - size / 2, cy - size - 8, size, size);
         }
 
-        this.p.fill(255);
-        this.p.noStroke();
-        this.p.textSize(Math.max(16, this.cellSize * 0.55));
-        this.p.textStyle(this.p.BOLD);
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.text(t('end.gameEnd'), cx, cy + 8);
+        ctx.fillStyle = rgba(255);
+        ctx.font = `bold ${Math.max(16, this.cellSize * 0.55)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(t('end.gameEnd'), cx, cy + 8);
 
         const labelText = result === 1 ? t('end.blueWins') : result === 2 ? t('end.redWins') : t('end.draw');
-        this.p.fill(result === 1 ? this.p.color(96, 165, 250) : result === 2 ? this.p.color(248, 113, 113) : 255);
-        this.p.textSize(Math.max(14, this.cellSize * 0.4));
-        this.p.text(labelText, cx, cy + 36);
+        ctx.fillStyle = result === 1 ? rgba(96, 165, 250) : result === 2 ? rgba(248, 113, 113) : rgba(255);
+        ctx.font = `${Math.max(14, this.cellSize * 0.4)}px sans-serif`;
+        ctx.fillText(labelText, cx, cy + 36);
     }
 
     resizeBoard() {
-        if (!this.p) return;
+        if (!this.host) return;
         this.layoutBoard();
-        this.p.resizeCanvas(this.canvasWidth, this.canvasHeight);
+        this.host.setCssSize(this.canvasWidth, this.canvasHeight);
     }
-    
+
     canSelectUnit(unit) {
-        return unit.teamId === this.gameLogic.currentTurnTeamId && 
+        return unit.teamId === this.gameLogic.currentTurnTeamId &&
                !this.gameLogic.hasEndedTurn(unit) &&
                unit.name !== "Base" &&
                unit.hp > 0;
@@ -489,20 +411,15 @@ class P5BattleGraphics {
             mouseY < this.offsetY || mouseY > this.offsetY + this.boardHeight) {
             return;
         }
-        
-        // Calculate cell coordinates
+
         const col = Math.floor((mouseX - this.offsetX) / this.cellSize);
         const row = Math.floor((mouseY - this.offsetY) / this.cellSize);
-        
-        // Phe đang tới lượt do AI cầm thì bỏ qua click, tránh người chơi đi hộ AI
-        // hoặc chen ngang trong lúc engine đang tính.
+
         if (this.ai && this.ai.autoPlay && this.ai.controlsCurrentTurn()) return;
 
-        // Get unit at clicked position
         const clickedUnit = this.gameLogic._getUnitByPosition(row, col);
         const currentUnit = this.gameLogic.currentTurnUnit;
-        
-        // Case 1: No current unit selected - try to select a unit
+
         if (!currentUnit) {
             if (clickedUnit && this.canSelectUnit(clickedUnit)) {
                 this.gameLogic.currentTurnUnit = clickedUnit;
@@ -510,60 +427,43 @@ class P5BattleGraphics {
             }
             return;
         }
-        
-        // Case 2: Clicked on empty cell
+
         if (!clickedUnit) {
             this.handleEmptyCellClick(row, col, currentUnit);
-        }
-        // Case 3: Clicked on a unit
-        else {
-            // Check if clicked unit is selectable (has green border)
+        } else {
             if (this.canSelectUnit(clickedUnit)) {
-                // Check if current unit can perform any action on clicked unit
                 const canHeal = this.gameLogic.getHealableTargets(currentUnit).some(target => target.id === clickedUnit.id);
                 const canSacrifice = this.gameLogic.getSacrificeableTargets(currentUnit).some(target => target.id === clickedUnit.id);
                 const canSuicide = clickedUnit.id === currentUnit.id;
-                
+
                 if (canHeal || canSacrifice || canSuicide) {
-                    // Current unit can perform action on clicked unit - execute action
                     this.handleUnitClick(clickedUnit, currentUnit);
                 } else {
-                    // Current unit cannot perform any action - switch to clicked unit
                     this.gameLogic.currentTurnUnit = clickedUnit;
                     console.log(`Switched to unit: ${clickedUnit.name}`);
                 }
             } else {
-                // Clicked unit is not selectable - handle as normal unit click
                 this.handleUnitClick(clickedUnit, currentUnit);
             }
         }
     }
 
     handleEmptyCellClick(row, col, currentUnit) {
-        // Check if the cell is reachable for movement
         const reachableCells = this.gameLogic.getReachableCells(currentUnit);
         const isReachable = reachableCells.some(cell => cell.row === row && cell.col === col);
-        
+
         if (isReachable) {
-            // Try to make move
-
-            // lưu lại old position để vẽ arrow indicator
             const oldCell = { row: currentUnit.row, col: currentUnit.col };
-
             const moveSuccess = this.gameLogic.makeMove(currentUnit, row, col);
             if (moveSuccess) {
                 console.log(`Unit moved to (${row}, ${col})`);
-
-                // xóa recent actions
                 this.recentActions = [];
-                // lưu lại action
                 this.recentActions.push({ type: 'move', from: oldCell, to: { row, col } });
 
                 const canAttack = this.gameLogic.getAttackableTargets(currentUnit).length > 0;
                 const canHeal = this.gameLogic.getHealableTargets(currentUnit).length > 0;
                 const canSacrifice = this.gameLogic.getSacrificeableTargets(currentUnit).length > 0;
 
-                // nếu không có action nào thì tự động chuyển sang turn của unit khác
                 if (!canAttack && !canHeal && !canSacrifice) {
                     console.log('No valid action for current unit, switching to next turn');
                     this.gameLogic.newTurn();
@@ -571,122 +471,94 @@ class P5BattleGraphics {
             }
         }
     }
-    
+
     handleUnitClick(clickedUnit, currentUnit) {
-        // Case 1: Clicked on current unit (suicide)
         if (clickedUnit.id === currentUnit.id) {
             const suicideSuccess = this.gameLogic.makeSuicide(currentUnit);
             if (suicideSuccess) {
                 console.log('Suicide executed');
-
-                // kiểm tra nếu game đã kết thúc
                 const result = this.gameLogic.isGameEnd();
                 if (result !== 0) {
                     this.drawGameEndInfoBoard(result);
                     return;
                 }
-
                 console.log('Suicide executed, switching to next turn');
                 this.gameLogic.newTurn();
             }
             return;
         }
-        
-        // Case 2: Check if clicked unit is attackable
+
         const attackableTargets = this.gameLogic.getAttackableTargets(currentUnit);
         const isAttackable = attackableTargets.some(target => target.id === clickedUnit.id);
         if (isAttackable) {
             const attackSuccess = this.gameLogic.makeAttack(currentUnit, clickedUnit);
             if (attackSuccess) {
                 console.log(`Attacked unit at (${clickedUnit.row}, ${clickedUnit.col})`);
-
-                // xóa recent actions
                 this.recentActions = [];
-                // lưu lại action
                 this.recentActions.push({
                     type: 'attack',
                     from: { row: currentUnit.row, col: currentUnit.col },
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
-
-                // kiểm tra nếu game đã kết thúc
                 const result = this.gameLogic.isGameEnd();
                 if (result !== 0) {
                     this.drawGameEndInfoBoard(result);
                     return;
                 }
-
                 console.log('Heal executed, switching to next turn');
                 this.gameLogic.newTurn();
             }
             return;
         }
-        
-        // Case 3: Check if clicked unit is healable
+
         const healableTargets = this.gameLogic.getHealableTargets(currentUnit);
         const isHealable = healableTargets.some(target => target.id === clickedUnit.id);
         if (isHealable) {
             const healSuccess = this.gameLogic.makeHeal(currentUnit, clickedUnit);
             if (healSuccess) {
                 console.log(`Healed unit at (${clickedUnit.row}, ${clickedUnit.col})`);
-
-                // xóa recent actions
                 this.recentActions = [];
-                // lưu lại action
                 this.recentActions.push({
                     type: 'heal',
                     from: { row: currentUnit.row, col: currentUnit.col },
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
-
                 this.gameLogic.endTurn();
                 this.gameLogic.newTurn();
             }
             return;
         }
-        
-        // Case 4: Check if clicked unit is sacrificeable
+
         const sacrificeableTargets = this.gameLogic.getSacrificeableTargets(currentUnit);
         const isSacrificeable = sacrificeableTargets.some(target => target.id === clickedUnit.id);
         if (isSacrificeable) {
             const sacrificeSuccess = this.gameLogic.makeSacrifice(currentUnit, clickedUnit);
             if (sacrificeSuccess) {
                 console.log(`Sacrificed for unit at (${clickedUnit.row}, ${clickedUnit.col})`);
-
-                // xóa recent actions
                 this.recentActions = [];
-                // lưu lại action
                 this.recentActions.push({
                     type: 'sacrifice',
                     from: { row: currentUnit.row, col: currentUnit.col },
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
-
                 console.log('Sacrifice executed, switching to next turn');
                 this.gameLogic.newTurn();
             }
             return;
         }
-        
-        // If none of the above, do nothing
+
         console.log('No valid action for clicked unit');
     }
-    
+
     handleKeyPress(key) {
         if (key === 'Escape') {
-            // Deselect current unit
             this.gameLogic.currentTurnUnit = null;
             return;
         }
-        
-        // Phím d: bắt engine tính đúng một nước rồi đi, kể cả khi auto-play đang tắt.
-        // Giữ lại làm công cụ gỡ lỗi: bấm từng nước một để xem engine chọn gì.
         if (key === 'd' || key === 'D') {
             if (this.ai) this.ai.think();
             return;
         }
-
-        // Phím a: bật/tắt chế độ AI tự đi.
         if (key === 'a' || key === 'A') {
             if (this.ai) this.ai.setAutoPlay(!this.ai.autoPlay);
             return;
@@ -695,27 +567,25 @@ class P5BattleGraphics {
 
     destroy() {
         if (this.ai) this.ai.destroy();
-        if (this.p5Instance) {
-            this.p5Instance.remove();
-            this.p5Instance = null;
+        if (this.host) {
+            this.host.canvas.removeEventListener('pointerdown', this._onPointer);
+            this.host.canvas.removeEventListener('keydown', this._onKey);
+            window.removeEventListener('resize', this._onResize);
+            this.host.destroy();
+            this.host = null;
         }
-        this.p = null;
+        this.ctx = null;
     }
 
-    // Method to redraw the entire board
-    redraw() {
-        // p5.js automatically calls draw() every frame, so we don't need to manually redraw
-    }
-    
-    // Method to advance to next turn
+    redraw() {}
+
     nextTurn() {
         this.gameLogic.newTurn();
     }
-    
-    // Method to get current turn info
+
     getCurrentTurnInfo() {
         return this.gameLogic.getCurrentTurnInfo();
     }
 }
 
-export default P5BattleGraphics;
+export default BattleGraphics;

@@ -102,7 +102,7 @@ app.get('/api/debug', (req, res) => {
         files: {
             'index.html': fs.existsSync(path.join(__dirname, 'public', 'index.html')),
             'index.js': fs.existsSync(path.join(__dirname, 'public', 'index.js')),
-            'p5-battle-sketch.js': fs.existsSync(path.join(__dirname, 'public', 'p5-battle-sketch.js')),
+            'battle-sketch.js': fs.existsSync(path.join(__dirname, 'public', 'battle-sketch.js')),
             'definitions.js': fs.existsSync(path.join(__dirname, 'core-logic/definitions.js')),
             'style.css': fs.existsSync(path.join(__dirname, 'style.css'))
         },

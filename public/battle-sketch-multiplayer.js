@@ -1,9 +1,10 @@
-// P5 Battle Graphics cho Multiplayer - chỉ render, không xử lý game logic
+// Canvas 2D Battle Graphics cho Multiplayer - chỉ render, không xử lý game logic
 import { BOARD_COLS, BOARD_ROWS, UNIT_TYPES } from '/core-logic/definitions.js';
 import { t } from './i18n.js';
 import GameLogic from '/core-logic/game-logic.js';
+import { mountCanvas, loadImages, drawImage, rgba, fillTriangle } from './canvas-2d.js';
 
-class P5BattleGraphicsMultiplayer {
+class BattleGraphicsMultiplayer {
     constructor(matchInfo, gameSocket, currentUserId, playerTeam) {
         
         this.matchInfo = matchInfo;
@@ -52,13 +53,11 @@ class P5BattleGraphicsMultiplayer {
             this.offsetY = this.topPanelHeight + 5;
         }
         
-        // Load images
         this.images = {};
+        this.host = null;
+        this.ctx = null;
         this.loadImages();
-        
-        // Setup P5
-        this.setupP5();
-        
+        this.initCanvas();
     }
 
     // Device detection and responsive sizing methods
@@ -211,9 +210,8 @@ class P5BattleGraphicsMultiplayer {
                 this.offsetY = this.topPanelHeight + 5;
             }
             
-            // Resize P5 canvas
-            if (this.p) {
-                this.p.resizeCanvas(this.canvasWidth, this.canvasHeight);
+            if (this.host) {
+                this.host.setCssSize(this.canvasWidth, this.canvasHeight);
             }
             
             console.log(`📱 Canvas resized for ${this.deviceType}: ${this.canvasWidth}x${this.canvasHeight}, cellSize: ${this.cellWidth.toFixed(1)}x${this.cellHeight.toFixed(1)}px`);
@@ -260,47 +258,41 @@ class P5BattleGraphicsMultiplayer {
         });
     }
 
-    setupP5() {
-        const sketch = (p) => {
-            this.p = p;
-            
-            p.setup = () => {
-                const canvas = p.createCanvas(this.canvasWidth, this.canvasHeight);
-                canvas.parent('game-canvas-container');
-                
-                // Load images
-                this.images = {};
-                Object.keys(this.imagePaths).forEach(key => {
-                    this.images[key] = p.loadImage(this.imagePaths[key]);
-                });
-                
-                // Mouse click handler
-                canvas.mousePressed(() => {
-                    this.handleCanvasClick(p.mouseX, p.mouseY);
-                });
-                
-                // Touch handler for mobile
-                canvas.touchStarted(() => {
-                    this.handleCanvasClick(p.mouseX, p.mouseY);
-                });
-                
-                // Keyboard handler
-                p.keyPressed = () => {
-                    this.handleKeyPress(p.key);
-                };
-                
-                // Handle window resize
-                window.addEventListener('resize', () => {
-                    this.handleWindowResize();
-                });
-            };
-            
-            p.draw = () => {
-                this.draw();
-            };
+    initCanvas() {
+        this.host = mountCanvas('game-canvas-container');
+        this.ctx = this.host.ctx;
+        this.host.setCssSize(this.canvasWidth, this.canvasHeight);
+
+        this.images = loadImages(this.imagePaths);
+
+        this._onPointer = (e) => {
+            e.preventDefault();
+            const { x, y } = this.host.eventToLocal(e);
+            this.handleCanvasClick(x, y);
         };
-        
-        new p5(sketch);
+        this.host.canvas.addEventListener('pointerdown', this._onPointer);
+
+        this._onKey = (e) => {
+            this.handleKeyPress(e.key);
+        };
+        window.addEventListener('keydown', this._onKey);
+
+        this._onResize = () => this.handleWindowResize();
+        window.addEventListener('resize', this._onResize);
+
+        this.host.startLoop(() => this.draw());
+    }
+
+    destroy() {
+        if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
+        if (this.host) {
+            this.host.canvas.removeEventListener('pointerdown', this._onPointer);
+            window.removeEventListener('keydown', this._onKey);
+            window.removeEventListener('resize', this._onResize);
+            this.host.destroy();
+            this.host = null;
+        }
+        this.ctx = null;
     }
 
     // Update game state from server
@@ -604,87 +596,78 @@ class P5BattleGraphicsMultiplayer {
 
     // Main draw function
     draw() {
-        // Clear background
-        this.p.background(40, 40, 50);
-        
-        // Check if game is ready
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(40, 40, 50);
+        ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+
         if (!this.gameLogic || !this.matchInfo) {
             this.drawLoadingScreen();
             return;
         }
-        
-        // Check if game ended
+
         const gameEndResult = this.gameLogic.isGameEnd ? this.gameLogic.isGameEnd() : 0;
         if (gameEndResult !== 0) {
             this.drawGameEndScreen(gameEndResult);
             return;
         }
 
-        // Draw game
         this.drawTopPanel();
         this.drawBoard();
-        
         this.drawHighlights();
-        
         this.drawUnits();
         this.drawActionArrows();
         this.drawActionIndicators();
-        
     }
 
     drawLoadingScreen() {
-        this.p.fill(255);
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.textSize(24);
-        this.p.text('Loading Game...', this.canvasWidth / 2, this.canvasHeight / 2);
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(255);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '24px sans-serif';
+        ctx.fillText('Loading Game...', this.canvasWidth / 2, this.canvasHeight / 2);
     }
 
     drawGameEndScreen(result) {
-        // Dark overlay
-        this.p.fill(0, 0, 0, 180);
-        this.p.rect(0, 0, this.canvasWidth, this.canvasHeight);
-        
-        // Result text
-        this.p.fill(255);
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.textSize(36);
-        
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(0, 0, 0, 180);
+        ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+        ctx.fillStyle = rgba(255);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '36px sans-serif';
+
         let resultText = '';
         let resultColor = [255, 255, 255];
-        
+
         if (result === 1) {
-            // Team 1 (blue) wins
             resultText = this.isPlayerBlue ? t('end.victory') : t('end.defeat');
             resultColor = this.isPlayerBlue ? [0, 255, 0] : [255, 0, 0];
         } else if (result === 2) {
-            // Team 2 (red) wins
             resultText = this.isPlayerBlue ? t('end.defeat') : t('end.victory');
             resultColor = this.isPlayerBlue ? [255, 0, 0] : [0, 255, 0];
         } else {
             resultText = t('end.drawCaps');
             resultColor = [255, 255, 0];
         }
-        
+
         const winImg = result === 1 ? this.images['Base_blue'] : result === 2 ? this.images['Base_red'] : null;
         if (winImg) {
             const size = Math.min(this.canvasWidth, this.canvasHeight) * 0.22;
-            this.p.image(winImg, this.canvasWidth / 2 - size / 2, this.canvasHeight / 2 - size - 20, size, size);
+            drawImage(ctx, winImg, this.canvasWidth / 2 - size / 2, this.canvasHeight / 2 - size - 20, size, size);
         }
-        this.p.fill(resultColor[0], resultColor[1], resultColor[2]);
-        this.p.text(resultText, this.canvasWidth / 2, this.canvasHeight / 2);
+        ctx.fillStyle = rgba(resultColor[0], resultColor[1], resultColor[2]);
+        ctx.fillText(resultText, this.canvasWidth / 2, this.canvasHeight / 2);
     }
 
     drawTopPanel() {
-        // Panel background
-        this.p.fill(60, 60, 70);
-        this.p.noStroke();
-        this.p.rect(this.offsetX, 0, this.boardWidth, this.topPanelHeight);
-        
-        // Panel border
-        this.p.stroke(100, 100, 120);
-        this.p.strokeWeight(2);
-        this.p.noFill();
-        this.p.rect(this.offsetX, 0, this.boardWidth, this.topPanelHeight);
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(60, 60, 70);
+        ctx.fillRect(this.offsetX, 0, this.boardWidth, this.topPanelHeight);
+        ctx.strokeStyle = rgba(100, 100, 120);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.offsetX, 0, this.boardWidth, this.topPanelHeight);
         
         // Team info
         const teamPanelWidth = this.boardWidth / 3;
@@ -709,29 +692,20 @@ class P5BattleGraphicsMultiplayer {
         const isCurrentTeam = this.gameLogic && team.teamId === this.gameLogic.currentTurnTeamId;
         const isMyTurn = isCurrentTeam && isPlayerTeam;
         
-        // Panel background
-        if (isCurrentTeam) {
-            this.p.fill(60, 120, 60); // Green for active team
-        } else {
-            this.p.fill(50, 50, 60);
-        }
-        this.p.noStroke();
-        this.p.rect(x, y, width, height);
-        
-        // Panel border
-        this.p.stroke(isCurrentTeam ? 120 : 80);
-        this.p.strokeWeight(2);
-        this.p.noFill();
-        this.p.rect(x, y, width, height);
-        
-        // Team info
-        this.p.fill(255);
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.textSize(12);
-        this.p.textStyle(this.p.BOLD);
-        
+        const ctx = this.ctx;
+        ctx.fillStyle = isCurrentTeam ? rgba(60, 120, 60) : rgba(50, 50, 60);
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = rgba(isCurrentTeam ? 120 : 80);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+
+        ctx.fillStyle = rgba(255);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 12px sans-serif';
+
         const teamLabel = isPlayerTeam ? 'YOU' : 'OPPONENT';
-        this.p.text(teamLabel, x + width / 2, y + 15);
+        ctx.fillText(teamLabel, x + width / 2, y + 15);
         
         // Movement points - prefer server-calculated values, fallback to client calculation
         let movementPoints = 0;
@@ -760,106 +734,83 @@ class P5BattleGraphicsMultiplayer {
             }, 0);
         }
         
-        this.p.textSize(10);
-        this.p.text(`Movement: ${movementPoints}`, x + width / 2, y + 30);
-        
-        // Turn indicator
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`Movement: ${movementPoints}`, x + width / 2, y + 30);
+
         if (isMyTurn) {
-            this.p.fill(255, 255, 0);
-            this.p.textSize(10);
-            this.p.text('YOUR TURN', x + width / 2, y + 45);
+            ctx.fillStyle = rgba(255, 255, 0);
+            ctx.font = '10px sans-serif';
+            ctx.fillText('YOUR TURN', x + width / 2, y + 45);
         } else if (isCurrentTeam) {
-            this.p.fill(255, 100, 100);
-            this.p.textSize(10);
-            this.p.text('OPPONENT TURN', x + width / 2, y + 45);
+            ctx.fillStyle = rgba(255, 100, 100);
+            ctx.font = '10px sans-serif';
+            ctx.fillText('OPPONENT TURN', x + width / 2, y + 45);
         }
-        
-        // Priority indicator
+
         if (this.gameLogic && team.teamId === this.gameLogic.priorityTeamId) {
-            this.p.fill(255, 255, 0);
-            this.p.textSize(8);
-            this.p.text('★ PRIORITY', x + width / 2, y + height - 10);
+            ctx.fillStyle = rgba(255, 255, 0);
+            ctx.font = '8px sans-serif';
+            ctx.fillText('★ PRIORITY', x + width / 2, y + height - 10);
         }
     }
 
     drawCurrentUnitPanel(x, y, width, height) {
-        // Panel background
-        this.p.fill(50, 50, 60);
-        this.p.noStroke();
-        this.p.rect(x, y, width, height);
-        
-        // Panel border
-        this.p.stroke(80);
-        this.p.strokeWeight(2);
-        this.p.noFill();
-        this.p.rect(x, y, width, height);
-        
-        // Title
-        this.p.fill(255);
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.textSize(11);
-        this.p.textStyle(this.p.BOLD);
-        this.p.text('SELECTED UNIT', x + width / 2, y + 12);
-        
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(50, 50, 60);
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = rgba(80);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+
+        ctx.fillStyle = rgba(255);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('SELECTED UNIT', x + width / 2, y + 12);
+
         if (this.selectedUnit) {
-            // Unit image (larger size)
             const unitSize = 40;
             const unitX = x + width / 2 - unitSize / 2;
             const unitY = y + 20;
-            
             const imageKey = this.getUnitImageKey(this.selectedUnit);
             if (this.images[imageKey]) {
-                this.p.image(this.images[imageKey], unitX, unitY, unitSize, unitSize);
+                drawImage(ctx, this.images[imageKey], unitX, unitY, unitSize, unitSize);
             }
-            
-            // Unit info
-            this.p.textSize(9);
-            this.p.text(this.selectedUnit.name, x + width / 2, y + 65);
-            
-            // HP and Speed on same line with icons
-            this.p.textSize(8);
+            ctx.font = '9px sans-serif';
+            ctx.fillText(this.selectedUnit.name, x + width / 2, y + 65);
+            ctx.font = '8px sans-serif';
             const statsText = `❤️ ${this.selectedUnit.hp}  🦵 ${this.selectedUnit.speed}`;
-            this.p.text(statsText, x + width / 2, y + 78);
+            ctx.fillText(statsText, x + width / 2, y + 78);
         } else {
-            this.p.textSize(9);
-            this.p.text('Click unit to select', x + width / 2, y + 50);
+            ctx.font = '9px sans-serif';
+            ctx.fillText('Click unit to select', x + width / 2, y + 50);
         }
     }
 
     drawBoard() {
+        const ctx = this.ctx;
         for (let row = 0; row < BOARD_ROWS; row++) {
             for (let col = 0; col < BOARD_COLS; col++) {
                 const { x, y } = this.getBoardPosition(row, col);
-                
-                // Checkerboard pattern
                 const isLight = (row + col) % 2 === 0;
-                this.p.fill(isLight ? 240 : 220);
-                this.p.noStroke();
-                this.p.rect(x, y, this.cellWidth, this.cellHeight);
-                
-                // Cell border
-                this.p.stroke(200);
-                this.p.strokeWeight(1);
-                this.p.noFill();
-                this.p.rect(x, y, this.cellWidth, this.cellHeight);
+                ctx.fillStyle = isLight ? rgba(240) : rgba(220);
+                ctx.fillRect(x, y, this.cellWidth, this.cellHeight);
+                ctx.strokeStyle = rgba(200);
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x + 0.5, y + 0.5, this.cellWidth - 1, this.cellHeight - 1);
             }
         }
     }
-    
-    drawHighlights() {        
+
+    drawHighlights() {
+        const ctx = this.ctx;
         this.highlightedCells.forEach((cell) => {
             const { x, y } = this.getBoardPosition(cell.row, cell.col);
-            
-            // Fill the cell with highlight color
-            this.p.fill(cell.color[0], cell.color[1], cell.color[2], cell.color[3] || 255);
-            this.p.noStroke();
-            this.p.rect(x, y, this.cellWidth, this.cellHeight);
-            
-            // Highlight border
-            this.p.stroke(cell.borderColor[0], cell.borderColor[1], cell.borderColor[2]);
-            this.p.strokeWeight(3);
-            this.p.noFill();
-            this.p.rect(x, y, this.cellWidth, this.cellHeight);
+            ctx.fillStyle = rgba(cell.color[0], cell.color[1], cell.color[2], cell.color[3] || 255);
+            ctx.fillRect(x, y, this.cellWidth, this.cellHeight);
+            ctx.strokeStyle = rgba(cell.borderColor[0], cell.borderColor[1], cell.borderColor[2]);
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, this.cellWidth, this.cellHeight);
         });
     }
 
@@ -895,11 +846,12 @@ class P5BattleGraphicsMultiplayer {
         const centerX = x + this.cellWidth / 2;
         const centerY = y + this.cellHeight / 2;
         
-        // ✅ Explosion icon at suicide center
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.textSize(24); // Larger than death effects
-        this.p.fill(255, 150, 0, 240); // Bright orange explosion
-        this.p.text('💥', centerX, centerY);
+        const ctx = this.ctx;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '24px sans-serif';
+        ctx.fillStyle = rgba(255, 150, 0, 240);
+        ctx.fillText('💥', centerX, centerY);
     }
 
     // Determine if arrow style represents a death
@@ -914,11 +866,12 @@ class P5BattleGraphicsMultiplayer {
         const centerX = x + this.cellWidth / 2;
         const centerY = y + this.cellHeight / 2;
         
-        // ✅ Set text properties
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.textSize(20);        
-        this.p.fill(255, 255, 255, 220);
-        this.p.text('☠️', centerX, centerY + 5); // Skull for kill
+        const ctx = this.ctx;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '20px sans-serif';
+        ctx.fillStyle = rgba(255, 255, 255, 220);
+        ctx.fillText('☠️', centerX, centerY + 5);
     }
 
     drawArrow(from, to, color, style = 'solid', width = 5) {
@@ -945,16 +898,17 @@ class P5BattleGraphicsMultiplayer {
         // Don't draw arrow if from and to are the same
         if (x1 === x2 && y1 === y2) return;
         
-        // Set arrow style with transparency
-        this.p.stroke(color[0], color[1], color[2], 80); //
-        this.p.strokeWeight(width);
-        
+        const ctx = this.ctx;
+        ctx.strokeStyle = rgba(color[0], color[1], color[2], 80);
+        ctx.lineWidth = width;
+
         if (style === 'dashed') {
-            // Draw dashed line
             this.drawDashedLine(x1, y1, x2, y2, 10, 5);
-            } else {
-            // Draw solid line
-            this.p.line(x1, y1, x2, y2);
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
         }
         
         // Draw arrowhead
@@ -975,7 +929,11 @@ class P5BattleGraphicsMultiplayer {
             const endX = startX + deltaX * dashLength;
             const endY = startY + deltaY * dashLength;
             
-            this.p.line(startX, startY, endX, endY);
+            const ctx = this.ctx;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
         }
     }
 
@@ -989,10 +947,9 @@ class P5BattleGraphicsMultiplayer {
         const x4 = x2 - arrowSize * Math.cos(angle + Math.PI / 6);
         const y4 = y2 - arrowSize * Math.sin(angle + Math.PI / 6);
         
-        // Draw filled arrowhead with transparency
-        this.p.fill(color[0], color[1], color[2], 120); // 120/255 = ~47% opacity
-        this.p.noStroke();
-        this.p.triangle(x2, y2, x3, y3, x4, y4);
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(color[0], color[1], color[2], 120);
+        fillTriangle(ctx, x2, y2, x3, y3, x4, y4);
     }
 
     drawUnits() {
@@ -1017,30 +974,25 @@ class P5BattleGraphicsMultiplayer {
         const isPlayerUnit = (unit.teamId === this.playerTeam);
         const unitColor = isPlayerUnit ? 'blue' : 'red';
         
-        // Unit selection highlight
+        const ctx = this.ctx;
         if (this.selectedUnit && this.selectedUnit.id === unit.id) {
-            this.p.stroke(255, 255, 0);
-            this.p.strokeWeight(3);
-            this.p.noFill();
-            this.p.rect(x - 2, y - 2, this.cellWidth + 4, this.cellHeight + 4);
+            ctx.strokeStyle = rgba(255, 255, 0);
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x - 2, y - 2, this.cellWidth + 4, this.cellHeight + 4);
         }
-        
-        // Selectable unit highlight (if it's player's turn and unit can be selected)
+
         if (this.canSelectUnit(unit)) {
-            this.p.stroke(0, 255, 0);
-            this.p.strokeWeight(2);
-            this.p.noFill();
-            this.p.rect(x, y, this.cellWidth, this.cellHeight);
+            ctx.strokeStyle = rgba(0, 255, 0);
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, this.cellWidth, this.cellHeight);
         }
-        
-        // Unit image
+
         const imageKey = `${unit.armyType || unit.name}_${unitColor}`;
         if (this.images[imageKey]) {
             const imgSize = Math.min(this.cellWidth, this.cellHeight) * 0.8;
             const imgX = x + (this.cellWidth - imgSize) / 2;
             const imgY = y + (this.cellHeight - imgSize) / 2;
-            
-            this.p.image(this.images[imageKey], imgX, imgY, imgSize, imgSize);
+            drawImage(ctx, this.images[imageKey], imgX, imgY, imgSize, imgSize);
         }
             
         // HP bar
@@ -1056,54 +1008,47 @@ class P5BattleGraphicsMultiplayer {
         const barX = x + (this.cellWidth - barWidth) / 2;
         const barY = y + 2;
         
-        // Background
-        this.p.fill(80);
-        this.p.noStroke();
-        this.p.rect(barX, barY, barWidth, barHeight);
-        
-        // HP bar
+        const ctx = this.ctx;
+        ctx.fillStyle = rgba(80);
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
         const unitType = UNIT_TYPES[unit.armyType || unit.name];
         const maxHp = unitType ? unitType.hp : 5;
         const hpPercentage = unit.hp / maxHp;
         const hpWidth = barWidth * hpPercentage;
-        
-        if (unitColor === 'blue') {
-            this.p.fill(100, 150, 255);
-        } else {
-            this.p.fill(255, 100, 100);
-        }
-        this.p.rect(barX, barY, hpWidth, barHeight);
+
+        ctx.fillStyle = unitColor === 'blue' ? rgba(100, 150, 255) : rgba(255, 100, 100);
+        ctx.fillRect(barX, barY, hpWidth, barHeight);
     }
     
     drawEffectIndicators(unit, x, y) {
         if (!unit.effects || unit.effects.length === 0) return;
         
-        this.p.textAlign(this.p.CENTER, this.p.CENTER);
-        this.p.textSize(10);
-        
-        // Show effect icons
+        const ctx = this.ctx;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '10px sans-serif';
+        ctx.fillStyle = rgba(255, 255, 255, 200);
+
         unit.effects.forEach((effect, index) => {
             const iconX = x + 8 + (index * 12);
             const iconY = y + this.cellHeight - 12;
-            
-            this.p.fill(255, 255, 255, 200);
-            
             switch (effect.name) {
                 case 'lock':
-                    this.p.text('🔒', iconX, iconY);
+                    ctx.fillText('🔒', iconX, iconY);
                     break;
                 case 'adjacent penalty':
-                    this.p.text('⛔', iconX, iconY);
+                    ctx.fillText('⛔', iconX, iconY);
                     break;
                 case 'dash':
-                    this.p.text('💨', iconX, iconY);
+                    ctx.fillText('💨', iconX, iconY);
                     break;
                 case 'SUICIDE':
                 case 'suicide':
-                    this.p.text('💣', iconX, iconY);
+                    ctx.fillText('💣', iconX, iconY);
                     break;
                 default:
-                    this.p.text('●', iconX, iconY);
+                    ctx.fillText('●', iconX, iconY);
                     break;
             }
         });
@@ -1488,4 +1433,4 @@ class P5BattleGraphicsMultiplayer {
     }
 }
 
-export default P5BattleGraphicsMultiplayer;
+export default BattleGraphicsMultiplayer;

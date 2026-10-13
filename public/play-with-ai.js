@@ -16,10 +16,9 @@ async function loadDefinitions() {
         UNIT_TYPES = module.UNIT_TYPES;
         console.log('Definitions loaded successfully:', Object.keys(UNIT_TYPES));
         
-        // Load p5 graphics module
-        const graphicsModule = await import('./p5-battle-sketch.js');
+        const graphicsModule = await import('./battle-sketch.js');
         P5BattleGraphics = graphicsModule.default;
-        console.log('P5 Graphics module loaded successfully');
+        console.log('Battle graphics module loaded successfully');
     } catch (error) {
         console.error('Error loading modules:', error);
         // Fallback to basic structure
