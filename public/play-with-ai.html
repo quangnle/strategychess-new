@@ -3,21 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Strategy Chess - Team Selection</title>
+    <title>Strategy Chess — Play with AI</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="/imgs/ui/logo.png">
     <link rel="stylesheet" href="/brand.css">
-    <meta name="description" content="Strategy Chess — epic battles begin">
+    <meta name="description" content="Strategy Chess — luyện tập 1 người, chọn đội hình rồi đánh với AI.">
+    <link rel="canonical" href="__OG_URL__">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Strategy Chess">
-    <meta property="og:title" content="Strategy Chess">
-    <meta property="og:description" content="Strategy Chess — epic battles begin">
-    <meta property="og:image" content="/imgs/ui/strategy-chess-og-image.png">
+    <meta property="og:locale" content="vi_VN">
+    <meta property="og:locale:alternate" content="en_US">
+    <meta property="og:url" content="__OG_URL__">
+    <meta property="og:title" content="Strategy Chess — Play with AI">
+    <meta property="og:description" content="Strategy Chess — luyện tập 1 người, chọn đội hình rồi đánh với AI.">
+    <meta property="og:image" content="__OG_ORIGIN__/imgs/ui/strategy-chess-og-image.png">
+    <meta property="og:image:secure_url" content="__OG_ORIGIN__/imgs/ui/strategy-chess-og-image.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
     <meta property="og:image:alt" content="Strategy Chess">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Strategy Chess">
-    <meta name="twitter:description" content="Strategy Chess — epic battles begin">
-    <meta name="twitter:image" content="/imgs/ui/strategy-chess-og-image.png">
+    <meta name="twitter:title" content="Strategy Chess — Play with AI">
+    <meta name="twitter:description" content="Strategy Chess — luyện tập 1 người, chọn đội hình rồi đánh với AI.">
+    <meta name="twitter:image" content="__OG_ORIGIN__/imgs/ui/strategy-chess-og-image.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script>
@@ -82,9 +90,12 @@
             </div>
         </div>
 
-        <div class="flex md:hidden gap-2 mb-2">
-            <button type="button" data-team-tab="blue" class="team-tab flex-1 py-2 rounded bg-blue-700 font-bold">BLUE</button>
-            <button type="button" data-team-tab="red" class="team-tab flex-1 py-2 rounded bg-gray-700 font-bold">RED</button>
+        <div id="mobile-pick-wizard" class="md:hidden mb-3 bg-gray-800/90 border border-yellow-600/50 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-2">
+                <button type="button" id="mobile-pick-back" class="hidden bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-1.5 px-2 rounded whitespace-nowrap" data-i18n="ai.pickBack">← Your team</button>
+                <p id="mobile-pick-title" class="flex-1 text-sm font-semibold text-yellow-300 leading-snug"></p>
+            </div>
+            <p id="mobile-pick-hint" class="text-xs text-gray-400 mt-1"></p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -146,8 +157,12 @@
         </div>
 
         <div class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-gray-900/95 border-t border-gray-700 px-3 py-2 safe-bottom">
+            <button id="mobile-pick-next"
+                    class="w-full bg-yellow-600 hover:bg-yellow-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-gray-900 disabled:text-gray-300 font-bold py-3 rounded-lg">
+                <span data-i18n="ai.nextAi">Next: pick AI team</span>
+            </button>
             <button id="global-start-btn-mobile"
-                    class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg">
+                    class="hidden w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg">
                 <span data-i18n="ai.start">Start Battle</span>
             </button>
         </div>

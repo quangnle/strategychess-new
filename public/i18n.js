@@ -86,6 +86,18 @@ const STRINGS = {
         'ai.noUnitCompact': 'Chưa chọn quân — bấm ảnh hoặc ô trên bàn',
         'ai.noUnit': 'Chưa chọn — bấm quân trên bàn hoặc danh sách',
         'ai.deselectTitle': 'Bấm để bỏ chọn quân',
+        'ai.stepYou': 'Bước 1/2 — Chọn đội của bạn ({team})',
+        'ai.stepAi': 'Bước 2/2 — Chọn đội cho AI ({team})',
+        'ai.stepOpp': 'Bước 2/2 — Chọn đội đối thủ ({team})',
+        'ai.stepBoth1': 'Bước 1/2 — Chọn đội {team}',
+        'ai.stepBoth2': 'Bước 2/2 — Chọn đội {team}',
+        'ai.stepHintYou': 'Chọn 1 hero và 5 quân thường.',
+        'ai.stepHintAi': 'Đội hình này là của AI — chọn xong rồi bắt đầu trận.',
+        'ai.stepHintOpp': 'Chọn đội còn lại rồi bắt đầu trận.',
+        'ai.nextAi': 'Tiếp: chọn đội AI',
+        'ai.nextOpp': 'Tiếp: chọn đội đối thủ',
+        'ai.nextTeam': 'Tiếp theo',
+        'ai.pickBack': '← Đội của bạn',
 
         'end.gameEnd': 'Hết trận',
         'end.blueWins': 'Xanh thắng!',
@@ -249,6 +261,18 @@ const STRINGS = {
         'ai.noUnitCompact': 'No unit — tap a portrait or a board square',
         'ai.noUnit': 'None selected — tap the board or the list',
         'ai.deselectTitle': 'Tap to deselect',
+        'ai.stepYou': 'Step 1/2 — Pick your team ({team})',
+        'ai.stepAi': 'Step 2/2 — Pick the AI team ({team})',
+        'ai.stepOpp': 'Step 2/2 — Pick the other team ({team})',
+        'ai.stepBoth1': 'Step 1/2 — Pick {team}',
+        'ai.stepBoth2': 'Step 2/2 — Pick {team}',
+        'ai.stepHintYou': 'Choose 1 hero and 5 regular units.',
+        'ai.stepHintAi': 'This army is for the AI. Then start the battle.',
+        'ai.stepHintOpp': 'Pick the remaining army, then start.',
+        'ai.nextAi': 'Next: pick AI team',
+        'ai.nextOpp': 'Next: pick other team',
+        'ai.nextTeam': 'Next',
+        'ai.pickBack': '← Your team',
 
         'end.gameEnd': 'Game End',
         'end.blueWins': 'Blue wins!',
@@ -559,10 +583,14 @@ export function initI18n() {
     document.querySelectorAll('[data-open-about]').forEach(btn => {
         btn.addEventListener('click', openAbout);
     });
-    const ogImage = new URL('/imgs/ui/strategy-chess-og-image.png', window.location.origin).href;
-    document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]').forEach(m => {
+    const origin = window.location.origin;
+    const pageUrl = window.location.href.split('#')[0];
+    const ogImage = new URL('/imgs/ui/strategy-chess-og-image.png', origin).href;
+    document.querySelectorAll('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"]').forEach(m => {
         m.setAttribute('content', ogImage);
     });
+    document.querySelectorAll('meta[property="og:url"]').forEach(m => m.setAttribute('content', pageUrl));
+    document.querySelectorAll('link[rel="canonical"]').forEach(m => m.setAttribute('href', pageUrl));
     applyI18n();
 }
 

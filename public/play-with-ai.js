@@ -250,15 +250,11 @@ class TeamManager {
     }
     
     updateGlobalStartButton() {
-        const buttons = [
-            document.getElementById('global-start-btn'),
-            document.getElementById('global-start-btn-mobile')
-        ];
+        const desktop = document.getElementById('global-start-btn');
         const ready = window.teamManagers && window.teamManagers.blue && window.teamManagers.red
             && window.teamManagers.blue.isReady() && window.teamManagers.red.isReady();
-        buttons.forEach(btn => {
-            if (btn) btn.disabled = !ready;
-        });
+        if (desktop) desktop.disabled = !ready;
+        applyMobilePickStep();
     }
     
     isReady() {
@@ -302,6 +298,7 @@ function initializeTeamManagers() {
 document.addEventListener('DOMContentLoaded', async () => {
     initI18n();
     window.addEventListener('sc:lang', () => {
+        applyMobilePickStep();
         if (window.teamManagers) {
             window.teamManagers.blue.renderPickedHero();
             window.teamManagers.red.renderPickedHero();
@@ -334,25 +331,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (btn) btn.addEventListener('click', startBattleIfReady);
     });
 
-    document.querySelectorAll('.team-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const team = btn.dataset.teamTab;
-            document.querySelectorAll('.team-tab').forEach(t => {
-                const on = t.dataset.teamTab === team;
-                t.classList.toggle('bg-blue-700', on && team === 'blue');
-                t.classList.toggle('bg-red-700', on && team === 'red');
-                t.classList.toggle('bg-gray-700', !on);
-            });
-            const blue = document.getElementById('blue-team-panel');
-            const red = document.getElementById('red-team-panel');
-            if (blue && red) {
-                blue.classList.toggle('hidden', team !== 'blue');
-                red.classList.toggle('hidden', team !== 'red');
-                blue.classList.add('md:block');
-                red.classList.add('md:block');
-            }
+    const mobileNext = document.getElementById('mobile-pick-next');
+    if (mobileNext) {
+        mobileNext.addEventListener('click', () => {
+            const you = playerTeamColor();
+            if (!teamManagers || !teamManagers[you] || !teamManagers[you].isReady()) return;
+            mobilePickStep = 2;
+            applyMobilePickStep();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
-    });
+    }
+    const mobileBack = document.getElementById('mobile-pick-back');
+    if (mobileBack) {
+        mobileBack.addEventListener('click', () => {
+            mobilePickStep = 1;
+            applyMobilePickStep();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+    window.addEventListener('resize', () => applyMobilePickStep());
+    applyMobilePickStep();
     
     // Back to selection button handler
     const backToSelectionBtn = document.getElementById('back-to-selection');
@@ -472,6 +470,98 @@ const aiSettings = {
     timeMs: parseInt(localStorage.getItem('sc_ai_time') || '3000', 10)
 };
 
+let mobilePickStep = 1;
+
+function playerTeamColor() {
+    return aiSettings.mode === 'blue' ? 'red' : 'blue';
+}
+
+function otherTeamColor() {
+    return playerTeamColor() === 'blue' ? 'red' : 'blue';
+}
+
+function teamLabel(color) {
+    return color === 'blue' ? t('ai.blue') : t('ai.red');
+}
+
+function isMobilePick() {
+    return window.matchMedia('(max-width: 767px)').matches;
+}
+
+function applyMobilePickStep() {
+    const blue = document.getElementById('blue-team-panel');
+    const red = document.getElementById('red-team-panel');
+    const title = document.getElementById('mobile-pick-title');
+    const hint = document.getElementById('mobile-pick-hint');
+    const nextBtn = document.getElementById('mobile-pick-next');
+    const startBtn = document.getElementById('global-start-btn-mobile');
+    const backBtn = document.getElementById('mobile-pick-back');
+    if (!blue || !red) return;
+
+    if (!isMobilePick()) {
+        blue.classList.remove('hidden');
+        red.classList.remove('hidden');
+        blue.classList.add('md:block');
+        red.classList.add('md:block');
+        if (nextBtn) nextBtn.classList.add('hidden');
+        if (startBtn) {
+            startBtn.classList.remove('hidden');
+            const bothReady = teamManagers && teamManagers.blue.isReady() && teamManagers.red.isReady();
+            startBtn.disabled = !bothReady;
+        }
+        if (backBtn) backBtn.classList.add('hidden');
+        return;
+    }
+
+    if (mobilePickStep !== 1 && mobilePickStep !== 2) mobilePickStep = 1;
+    const you = playerTeamColor();
+    const other = otherTeamColor();
+    const show = mobilePickStep === 1 ? you : other;
+    blue.classList.toggle('hidden', show !== 'blue');
+    red.classList.toggle('hidden', show !== 'red');
+    blue.classList.add('md:block');
+    red.classList.add('md:block');
+
+    const youReady = teamManagers && teamManagers[you] && teamManagers[you].isReady();
+    const otherReady = teamManagers && teamManagers[other] && teamManagers[other].isReady();
+
+    if (title) {
+        if (aiSettings.mode === 'both') {
+            title.textContent = mobilePickStep === 1
+                ? t('ai.stepBoth1', { team: teamLabel(you) })
+                : t('ai.stepBoth2', { team: teamLabel(other) });
+        } else if (mobilePickStep === 1) {
+            title.textContent = t('ai.stepYou', { team: teamLabel(you) });
+        } else if (aiSettings.mode === 'off') {
+            title.textContent = t('ai.stepOpp', { team: teamLabel(other) });
+        } else {
+            title.textContent = t('ai.stepAi', { team: teamLabel(other) });
+        }
+    }
+    if (hint) {
+        if (mobilePickStep === 1) hint.textContent = t('ai.stepHintYou');
+        else if (aiSettings.mode === 'off') hint.textContent = t('ai.stepHintOpp');
+        else hint.textContent = t('ai.stepHintAi');
+    }
+    if (backBtn) backBtn.classList.toggle('hidden', mobilePickStep !== 2);
+
+    if (nextBtn && startBtn) {
+        if (mobilePickStep === 1) {
+            nextBtn.classList.remove('hidden');
+            startBtn.classList.add('hidden');
+            nextBtn.disabled = !youReady;
+            const nextLabel = nextBtn.querySelector('[data-i18n]') || nextBtn;
+            if (aiSettings.mode === 'off') nextLabel.textContent = t('ai.nextOpp');
+            else if (aiSettings.mode === 'both') nextLabel.textContent = t('ai.nextTeam');
+            else nextLabel.textContent = t('ai.nextAi');
+        } else {
+            nextBtn.classList.add('hidden');
+            startBtn.classList.remove('hidden');
+            startBtn.disabled = !otherReady;
+        }
+    }
+}
+
 function paintAiSettings() {
     document.querySelectorAll('.ai-side-btn').forEach(btn => {
         const on = btn.dataset.mode === aiSettings.mode;
@@ -495,6 +585,8 @@ function setupAiSettings() {
             aiSettings.mode = btn.dataset.mode;
             localStorage.setItem('sc_ai_mode', aiSettings.mode);
             paintAiSettings();
+            mobilePickStep = 1;
+            applyMobilePickStep();
         });
     });
     document.querySelectorAll('.ai-time-btn').forEach(btn => {

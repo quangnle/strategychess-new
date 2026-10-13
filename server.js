@@ -21,6 +21,35 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 const isDebug = process.argv.includes('--inspect') || process.argv.includes('--inspect-brk');
 
+function publicOrigin(req) {
+    if (process.env.PUBLIC_ORIGIN) return process.env.PUBLIC_ORIGIN.replace(/\/$/, '');
+    const proto = String(req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+    const host = String(req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`).split(',')[0].trim();
+    return `${proto}://${host}`;
+}
+
+function sendPublicHtml(fileName, req, res) {
+    const filePath = path.join(__dirname, 'public', fileName);
+    fs.readFile(filePath, 'utf8', (err, html) => {
+        if (err) {
+            res.status(404).send('Not found');
+            return;
+        }
+        const origin = publicOrigin(req);
+        const pagePath = fileName === 'index.html' ? '/' : `/${fileName}`;
+        const pageUrl = `${origin}${pagePath}`;
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.type('html').send(
+            html.replaceAll('__OG_ORIGIN__', origin).replaceAll('__OG_URL__', pageUrl)
+        );
+    });
+}
+
+app.get(['/', '/index.html', '/play-with-ai.html', '/lobby.html', '/play.html'], (req, res) => {
+    const file = (req.path === '/' || req.path === '/index.html') ? 'index.html' : req.path.replace(/^\//, '');
+    sendPublicHtml(file, req, res);
+});
+
 // Enhanced CORS configuration
 app.use(cors({
     origin: '*',
@@ -86,12 +115,6 @@ app.use((req, res, next) => {
 // API routes
 import matchesRouter from './api/matches.js';
 app.use('/api/matches', matchesRouter);
-
-// Main route
-app.get('/', (req, res) => {
-    console.log('Serving index.html from public folder');
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 // Debug API endpoints
 app.get('/api/debug', (req, res) => {

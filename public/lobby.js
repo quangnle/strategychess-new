@@ -390,7 +390,7 @@ function initializeTeamSelection() {
 // Create hero card
 function createHeroCard(hero) {
     const card = document.createElement('div');
-    card.className = 'bg-gray-700 hover:bg-gray-600 rounded-lg p-3 cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-blue-500';
+    card.className = 'pick-card bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-blue-500';
     card.dataset.heroType = hero.type;
     
     // Get stats from UNIT_TYPES
@@ -402,27 +402,18 @@ function createHeroCard(hero) {
         magicRange: unitDef.magicRange
     };
     
+    const magic = stats.magicRange > 0
+        ? `<span><span class="text-purple-400">🔮</span><span class="text-purple-400">${stats.magicRange}</span></span>`
+        : '';
     card.innerHTML = `
         <div class="text-center">
-            <img src="${hero.image}" alt="${hero.name}" class="w-16 h-16 mx-auto mb-2 rounded">
-            <div class="text-sm font-medium text-white mb-2">${hero.name}</div>
-            <div class="text-xs text-gray-300 flex justify-center items-center space-x-2">
-                <span class="flex items-center">
-                    <span class="text-red-400 mr-1">❤</span>
-                    <span class="text-red-400">${stats.hp}</span>
-                </span>
-                <span class="flex items-center">
-                    <span class="text-yellow-400 mr-1">🦵</span>
-                    <span class="text-yellow-400">${stats.speed}</span>
-                </span>
-                <span class="flex items-center">
-                    <span class="text-orange-400 mr-1">⚔</span>
-                    <span class="text-orange-400">${stats.range}</span>
-                </span>
-                <span class="flex items-center">
-                    <span class="text-purple-400 mr-1">🔮</span>
-                    <span class="text-purple-400">${stats.magicRange}</span>
-                </span>
+            <img src="${hero.image}" alt="${hero.name}">
+            <div class="pick-name text-white">${hero.name}</div>
+            <div class="pick-stats text-gray-300">
+                <span><span class="text-red-400">❤</span><span class="text-red-400">${stats.hp}</span></span>
+                <span><span class="text-yellow-400">🦵</span><span class="text-yellow-400">${stats.speed}</span></span>
+                <span><span class="text-orange-400">⚔</span><span class="text-orange-400">${stats.range}</span></span>
+                ${magic}
             </div>
         </div>
     `;
@@ -435,7 +426,7 @@ function createHeroCard(hero) {
 // Create unit card
 function createUnitCard(unit) {
     const card = document.createElement('div');
-    card.className = 'bg-gray-700 hover:bg-gray-600 rounded-lg p-3 cursor-pointer transition-colors border-2 border-transparent hover:border-blue-500';
+    card.className = 'pick-card bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer transition-colors border-2 border-transparent hover:border-blue-500';
     card.dataset.unitType = unit.type;
     
     // Get stats from UNIT_TYPES
@@ -447,27 +438,18 @@ function createUnitCard(unit) {
         magicRange: unitDef.magicRange
     };
     
+    const magic = stats.magicRange > 0
+        ? `<span><span class="text-purple-400">🔮</span><span class="text-purple-400">${stats.magicRange}</span></span>`
+        : '';
     card.innerHTML = `
         <div class="text-center">
-            <img src="${unit.image}" alt="${unit.name}" class="w-12 h-12 mx-auto mb-2 rounded">
-            <div class="text-xs font-medium text-white mb-2">${unit.name}</div>
-            <div class="text-xs text-gray-300 flex justify-center items-center space-x-1">
-                <span class="flex items-center">
-                    <span class="text-red-400 mr-1">❤</span>
-                    <span class="text-red-400">${stats.hp}</span>
-                </span>
-                <span class="flex items-center">
-                    <span class="text-yellow-400 mr-1">🦵</span>
-                    <span class="text-yellow-400">${stats.speed}</span>
-                </span>
-                <span class="flex items-center">
-                    <span class="text-orange-400 mr-1">⚔</span>
-                    <span class="text-orange-400">${stats.range}</span>
-                </span>
-                <span class="flex items-center">
-                    <span class="text-purple-400 mr-1">🔮</span>
-                    <span class="text-purple-400">${stats.magicRange}</span>
-                </span>
+            <img src="${unit.image}" alt="${unit.name}">
+            <div class="pick-name text-white">${unit.name}</div>
+            <div class="pick-stats text-gray-300">
+                <span><span class="text-red-400">❤</span><span class="text-red-400">${stats.hp}</span></span>
+                <span><span class="text-yellow-400">🦵</span><span class="text-yellow-400">${stats.speed}</span></span>
+                <span><span class="text-orange-400">⚔</span><span class="text-orange-400">${stats.range}</span></span>
+                ${magic}
             </div>
         </div>
     `;

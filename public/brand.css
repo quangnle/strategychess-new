@@ -152,6 +152,51 @@ body {
     font-weight: 800;
 }
 
+.pick-card {
+    min-width: 0;
+    overflow: hidden;
+    padding: 0.4rem 0.3rem;
+}
+.pick-card img {
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: 0 auto 0.2rem;
+    object-fit: contain;
+    display: block;
+}
+.pick-card .pick-name {
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.2rem;
+}
+.pick-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.1rem 0.2rem;
+    font-size: 0.62rem;
+    line-height: 1.2;
+}
+.pick-stats span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1rem;
+}
+
+@media (min-width: 768px) {
+    .pick-card { padding: 0.75rem; }
+    .pick-card img { width: 4rem; height: 4rem; margin-bottom: 0.5rem; }
+    .pick-card .pick-name { font-size: 0.875rem; margin-bottom: 0.5rem; }
+    .pick-stats { font-size: 0.75rem; }
+}
+
 @media (min-width: 720px) {
     .about-grid { flex-direction: row; align-items: stretch; }
     .about-media {
