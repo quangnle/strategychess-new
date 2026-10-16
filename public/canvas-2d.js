@@ -57,6 +57,92 @@ export function fillTriangle(ctx, x1, y1, x2, y2, x3, y3) {
     ctx.fill();
 }
 
+function traceHeart(ctx, cx, cy, size) {
+    const s = size;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + s * 0.35);
+    ctx.bezierCurveTo(cx, cy + s * 0.12, cx - s * 0.5, cy - s * 0.02, cx - s * 0.5, cy - s * 0.22);
+    ctx.bezierCurveTo(cx - s * 0.5, cy - s * 0.5, cx - s * 0.15, cy - s * 0.52, cx, cy - s * 0.22);
+    ctx.bezierCurveTo(cx + s * 0.15, cy - s * 0.52, cx + s * 0.5, cy - s * 0.5, cx + s * 0.5, cy - s * 0.22);
+    ctx.bezierCurveTo(cx + s * 0.5, cy - s * 0.02, cx, cy + s * 0.12, cx, cy + s * 0.35);
+    ctx.closePath();
+}
+
+/** One heart per max-HP point. Filled hearts are remaining HP; outlined hearts are missing. */
+export function drawHpHearts(ctx, x, y, cellW, cellH, hp, maxHp) {
+    const max = Math.max(1, Math.round(Number(maxHp) || 1));
+    const cur = Math.max(0, Math.min(max, Math.round(Number(hp) || 0)));
+    const rows = max > 5 ? 2 : 1;
+    const cols = Math.ceil(max / rows);
+    const gapX = Math.max(0.4, cellW * 0.015);
+    const gapY = Math.max(0.2, cellH * 0.01);
+    const size = Math.max(3.2, Math.min(
+        cellH * 0.2,
+        cellW * 0.2,
+        (cellW * 0.9 - gapX * (cols - 1)) / cols
+    ));
+    const top = y + Math.max(0.5, cellH * 0.02);
+
+    for (let i = 0; i < max; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const countInRow = Math.min(cols, max - row * cols);
+        const rowW = countInRow * size + (countInRow - 1) * gapX;
+        const left = x + (cellW - rowW) / 2;
+        const cx = left + col * (size + gapX) + size / 2;
+        const cy = top + row * (size + gapY) + size * 0.45;
+        traceHeart(ctx, cx, cy, size);
+        if (i < cur) {
+            ctx.fillStyle = '#e11d48';
+            ctx.fill();
+            ctx.lineWidth = Math.max(0.6, size * 0.08);
+            ctx.strokeStyle = '#881337';
+            ctx.stroke();
+        } else {
+            ctx.fillStyle = 'rgba(15, 10, 12, 0.72)';
+            ctx.fill();
+            ctx.lineWidth = Math.max(0.8, size * 0.12);
+            ctx.strokeStyle = '#fecdd3';
+            ctx.stroke();
+        }
+    }
+}
+
+/** Dim overlay plus an amber check, for units that already finished their turn. */
+export function drawActedMarker(ctx, x, y, cellW, cellH) {
+    const top = Math.min(cellH * 0.28, 14);
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
+    ctx.fillRect(x, y + top, cellW, cellH - top);
+
+    const r = Math.max(5, Math.min(9, cellW * 0.16));
+    const cx = x + cellW - r - 1;
+    const cy = y + cellH - r - 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.96)';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(120, 53, 15, 0.95)';
+    ctx.stroke();
+
+    ctx.strokeStyle = '#1c1917';
+    ctx.lineWidth = Math.max(1.4, r * 0.28);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.42, cy + r * 0.02);
+    ctx.lineTo(cx - r * 0.08, cy + r * 0.36);
+    ctx.lineTo(cx + r * 0.46, cy - r * 0.36);
+    ctx.stroke();
+}
+
+export function unitHasActed(gameLogic, unit) {
+    if (!gameLogic || !unit) return false;
+    if (typeof gameLogic.hasEndedTurn === 'function') return gameLogic.hasEndedTurn(unit);
+    const list = gameLogic.alreadyEndedTurnUnits || [];
+    return list.some(ended => ended && ended.id === unit.id);
+}
+
 export function strokeCircle(ctx, x, y, diameter) {
     ctx.beginPath();
     ctx.arc(x, y, diameter / 2, 0, Math.PI * 2);

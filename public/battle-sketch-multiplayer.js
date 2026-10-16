@@ -2,7 +2,7 @@
 import { BOARD_COLS, BOARD_ROWS, UNIT_TYPES } from '/core-logic/definitions.js';
 import { t } from './i18n.js';
 import GameLogic from '/core-logic/game-logic.js';
-import { mountCanvas, loadImages, drawImage, rgba, fillTriangle } from './canvas-2d.js';
+import { mountCanvas, loadImages, drawImage, rgba, fillTriangle, drawHpHearts, drawActedMarker, unitHasActed } from './canvas-2d.js';
 
 class BattleGraphicsMultiplayer {
     constructor(matchInfo, gameSocket, currentUserId, playerTeam) {
@@ -452,7 +452,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [0, 100, 255, 120], 
                     style: 'solid', 
-                    width: 5 
+                    width: 8 
                 };
             
             case 'damage':
@@ -460,7 +460,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [255, 99, 71, 120], 
                     style: 'solid', 
-                    width: 5 
+                    width: 8 
                 };
             
             case 'kill':
@@ -468,7 +468,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [255, 0, 0, 150], 
                     style: 'solid', 
-                    width: 7 
+                    width: 11 
                 };
             
             case 'suicide_kill':
@@ -476,7 +476,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [255, 0, 0, 150], 
                     style: 'solid', 
-                    width: 7 
+                    width: 11 
                 };
             
             case 'suicide_damage':
@@ -484,7 +484,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [255, 165, 0, 120], 
                     style: 'solid', 
-                    width: 5 
+                    width: 8 
                 };
             
             case 'sacrifice':
@@ -492,7 +492,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [148, 0, 211, 120], 
                     style: 'solid', 
-                    width: 5 
+                    width: 8 
                 };
             
             case 'sacrifice_death':
@@ -500,7 +500,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [75, 0, 130, 150], 
                     style: 'dashed', 
-                    width: 6 
+                    width: 10 
                 };
             
             case 'heal':
@@ -508,7 +508,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [0, 255, 0, 120], 
                     style: 'solid', 
-                    width: 4 
+                    width: 7 
                 };
             
             default:
@@ -517,7 +517,7 @@ class BattleGraphicsMultiplayer {
                     ...baseArrow, 
                     color: [128, 128, 128, 120], 
                     style: 'solid', 
-                    width: 3 
+                    width: 6 
                 };
         }
     }
@@ -531,7 +531,7 @@ class BattleGraphicsMultiplayer {
                     to: details.toPosition,
                     color: [0, 100, 255, 120],
                     style: 'solid',
-                    width: 5,
+                    width: 8,
                     metadata: { actionType: 'move', style: 'move' }
                 };
                 
@@ -546,7 +546,7 @@ class BattleGraphicsMultiplayer {
                     to: { row: details.target.row, col: details.target.col },
                     color: [255, 0, 0, 120],
                     style: 'solid',
-                    width: 5,
+                    width: 8,
                     metadata: { actionType: 'attack', style: 'damage' }
                 };
                 
@@ -556,7 +556,7 @@ class BattleGraphicsMultiplayer {
                     to: { row: details.target.row, col: details.target.col },
                     color: [0, 255, 0, 120],
                     style: 'solid',
-                    width: 4,
+                    width: 7,
                     metadata: { actionType: 'heal', style: 'heal' }
                 };
                 
@@ -566,7 +566,7 @@ class BattleGraphicsMultiplayer {
                     to: { row: details.target.row, col: details.target.col },
                     color: [148, 0, 211, 120],
                     style: 'solid',
-                    width: 5,
+                    width: 8,
                     metadata: { actionType: 'sacrifice', style: 'sacrifice' }
                 };
                 
@@ -580,7 +580,7 @@ class BattleGraphicsMultiplayer {
                     to: { row: target.row, col: target.col },
                     color: [139, 0, 0, 120],
                     style: 'dashed',
-                    width: 6,
+                    width: 10,
                     metadata: { actionType: 'suicide', style: 'suicide_kill' }
                 }));
                 
@@ -874,7 +874,7 @@ class BattleGraphicsMultiplayer {
         ctx.fillText('☠️', centerX, centerY + 5);
     }
 
-    drawArrow(from, to, color, style = 'solid', width = 5) {
+    drawArrow(from, to, color, style = 'solid', width = 8) {
         if (!from || !to) {
             console.warn('❌ drawArrow: Invalid from/to positions:', { from, to });
             return;
@@ -899,8 +899,10 @@ class BattleGraphicsMultiplayer {
         if (x1 === x2 && y1 === y2) return;
         
         const ctx = this.ctx;
-        ctx.strokeStyle = rgba(color[0], color[1], color[2], 80);
+        ctx.strokeStyle = rgba(color[0], color[1], color[2], 210);
         ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
         if (style === 'dashed') {
             this.drawDashedLine(x1, y1, x2, y2, 10, 5);
@@ -939,7 +941,7 @@ class BattleGraphicsMultiplayer {
 
     drawArrowHead(x1, y1, x2, y2, color, width) {
         const angle = Math.atan2(y2 - y1, x2 - x1);
-        const arrowSize = Math.max(8, width * 2);
+        const arrowSize = Math.max(18, width * 2.6);
         
         // Calculate arrowhead points
         const x3 = x2 - arrowSize * Math.cos(angle - Math.PI / 6);
@@ -948,7 +950,7 @@ class BattleGraphicsMultiplayer {
         const y4 = y2 - arrowSize * Math.sin(angle + Math.PI / 6);
         
         const ctx = this.ctx;
-        ctx.fillStyle = rgba(color[0], color[1], color[2], 120);
+        ctx.fillStyle = rgba(color[0], color[1], color[2], 235);
         fillTriangle(ctx, x2, y2, x3, y3, x4, y4);
     }
 
@@ -994,31 +996,14 @@ class BattleGraphicsMultiplayer {
             const imgY = y + (this.cellHeight - imgSize) / 2;
             drawImage(ctx, this.images[imageKey], imgX, imgY, imgSize, imgSize);
         }
-            
-        // HP bar
-        this.drawHPBar(unit, x, y, unitColor);
-            
-        // Effect indicators
-            this.drawEffectIndicators(unit, x, y);
-    }
-    
-    drawHPBar(unit, x, y, unitColor) {
-        const barWidth = this.cellWidth * 0.8;
-        const barHeight = 4;
-        const barX = x + (this.cellWidth - barWidth) / 2;
-        const barY = y + 2;
-        
-        const ctx = this.ctx;
-        ctx.fillStyle = rgba(80);
-        ctx.fillRect(barX, barY, barWidth, barHeight);
 
-        const unitType = UNIT_TYPES[unit.armyType || unit.name];
-        const maxHp = unitType ? unitType.hp : 5;
-        const hpPercentage = unit.hp / maxHp;
-        const hpWidth = barWidth * hpPercentage;
-
-        ctx.fillStyle = unitColor === 'blue' ? rgba(100, 150, 255) : rgba(255, 100, 100);
-        ctx.fillRect(barX, barY, hpWidth, barHeight);
+        if (unitHasActed(this.gameLogic, unit)) {
+            drawActedMarker(ctx, x, y, this.cellWidth, this.cellHeight);
+        }
+        const unitType = UNIT_TYPES[unit.name] || UNIT_TYPES[unit.armyType || unit.name];
+        const maxHp = unitType ? unitType.hp : (unit.hp || 1);
+        drawHpHearts(ctx, x, y, this.cellWidth, this.cellHeight, unit.hp, maxHp);
+        this.drawEffectIndicators(unit, x, y);
     }
     
     drawEffectIndicators(unit, x, y) {

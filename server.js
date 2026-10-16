@@ -77,7 +77,7 @@ function sendPublicHtml(fileName, req, res) {
     });
 }
 
-app.get(['/', '/index.html', '/play-with-ai.html', '/lobby.html', '/play.html'], (req, res) => {
+app.get(['/', '/index.html', '/play-with-ai.html', '/lobby.html', '/play.html', '/replay.html'], (req, res) => {
     const file = (req.path === '/' || req.path === '/index.html') ? 'index.html' : req.path.replace(/^\//, '');
     sendPublicHtml(file, req, res);
 });
@@ -122,8 +122,8 @@ app.use('/ai-processor', express.static(path.join(__dirname, 'ai-processor'), {
     }
 }));
 
-// Parse JSON bodies
-app.use(express.json());
+// Parse JSON bodies. Replays post the full action log.
+app.use(express.json({ limit: '1mb' }));
 
 // Debug middleware with enhanced logging
 app.use((req, res, next) => {
@@ -146,7 +146,9 @@ app.use((req, res, next) => {
 
 // API routes
 import matchesRouter from './api/matches.js';
+import replaysRouter from './api/replays.js';
 app.use('/api/matches', matchesRouter);
+app.use('/api/replays', replaysRouter);
 
 // Debug API endpoints
 app.get('/api/debug', (req, res) => {

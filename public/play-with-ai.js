@@ -1,4 +1,5 @@
 import { t, initI18n } from './i18n.js';
+import { createReplayRecorder, winnerFromResult } from './replay-recorder.js';
 
 // Import modules
 let UNIT_TYPES = null;
@@ -342,6 +343,9 @@ function initializeTeamManagers() {
 // Initialize everything after DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
     initI18n();
+    window.addEventListener('beforeunload', () => {
+        if (replayRecorder) replayRecorder.flush(true);
+    });
     window.addEventListener('sc:lang', () => {
         applyMobilePickStep();
         if (window.teamManagers) {
@@ -458,12 +462,20 @@ function startBattle() {
     
     // Create matchInfo
     const matchInfo = createMatchInfo(blueTeam, redTeam);
-    
+
     // Switch to battle screen
     showBattleScreen();
-    
-    // Initialize battle graphics
+
+    // Initialize battle graphics (this clears any previous recorder)
     initializeBattleGraphics(matchInfo);
+    replayRecorder = createReplayRecorder({
+        teams: {
+            blue: { hero: blueTeam.hero, units: [...blueTeam.units] },
+            red: { hero: redTeam.hero, units: [...redTeam.units] }
+        },
+        players: replayPlayers()
+    });
+    replayRecorder.flush();
 }
 
 function createMatchInfo(blueTeam, redTeam) {
@@ -512,6 +524,7 @@ function showSelectionScreen() {
 }
 
 let battleGraphics = null;
+let replayRecorder = null;
 
 // Cài đặt AI chọn ở màn hình chuẩn bị, nhớ lại giữa các lần chơi.
 const aiSettings = {
@@ -662,7 +675,13 @@ function initializeBattleGraphics(matchInfo) {
             timeMs: aiSettings.timeMs,
             autoPlay: true,
             onUpdate: updateAiStatusLine,
-            onHudUpdate: renderBattleHud
+            onHudUpdate: renderBattleHud,
+            onReplayActions: (entries) => {
+                if (replayRecorder) replayRecorder.log(entries);
+            },
+            onGameEnd: (result) => {
+                if (replayRecorder) replayRecorder.finish(winnerFromResult(result));
+            }
         });
         console.log('P5 Battle graphics initialized successfully');
         updateAiStatusLine(battleGraphics.ai);
@@ -676,6 +695,8 @@ function initializeBattleGraphics(matchInfo) {
 }
 
 function destroyBattleGraphics() {
+    if (replayRecorder && !replayRecorder.record.endedAt) replayRecorder.flush(true);
+    replayRecorder = null;
     if (!battleGraphics) return;
     if (battleGraphics.destroy) battleGraphics.destroy();
     battleGraphics = null;
@@ -850,10 +871,37 @@ function renderBattleHud(graphics) {
     renderMobileRoster(graphics);
 }
 
+function replayPlayers() {
+    if (aiSettings.mode === 'both') {
+        return [
+            { userId: 'ai_blue', username: 'AI', team: 'blue' },
+            { userId: 'ai_red', username: 'AI', team: 'red' }
+        ];
+    }
+    if (aiSettings.mode === 'off') {
+        return [
+            { userId: 'local_blue', username: 'Blue', team: 'blue' },
+            { userId: 'local_red', username: 'Red', team: 'red' }
+        ];
+    }
+    if (aiSettings.mode === 'blue') {
+        return [
+            { userId: 'ai_blue', username: 'AI', team: 'blue' },
+            { userId: 'local_red', username: 'You', team: 'red' }
+        ];
+    }
+    return [
+        { userId: 'local_blue', username: 'You', team: 'blue' },
+        { userId: 'ai_red', username: 'AI', team: 'red' }
+    ];
+}
+
 function handleEndTurn() {
     if (!battleGraphics) return;
     const gameLogic = battleGraphics.gameLogic;
+    if (gameLogic.isGameEnd() !== 0) return;
 
+    let endedId = null;
     if (gameLogic.currentTurnUnit === null) {
         const currentTeam = gameLogic.matchInfo.team1.teamId === gameLogic.currentTurnTeamId ?
             gameLogic.matchInfo.team1 : gameLogic.matchInfo.team2;
@@ -863,12 +911,22 @@ function handleEndTurn() {
             !gameLogic.hasEndedTurn(unit)
         );
         if (availableUnit) {
+            endedId = availableUnit.id;
             gameLogic.markEndedTurn(availableUnit);
         }
     } else {
+        endedId = gameLogic.currentTurnUnit.id;
         gameLogic.endTurn();
     }
     gameLogic.newTurn();
+    if (replayRecorder) {
+        const entry = { action: 'end_turn' };
+        if (endedId) entry.unitId = endedId;
+        replayRecorder.log([entry]);
+    }
+    if (gameLogic.isGameEnd() !== 0 && replayRecorder) {
+        replayRecorder.finish(winnerFromResult(gameLogic.isGameEnd()));
+    }
 }
 
 

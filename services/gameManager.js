@@ -1,5 +1,7 @@
 import MatchInfo from '../core-logic/match-info.js';
 import GameLogic from '../core-logic/game-logic.js';
+import { applyLoggedAction, isLoggedAction, toReplayEntry } from '../core-logic/replay-actions.js';
+import { saveReplay } from './replayStore.js';
 
 // Mỗi game instance quản lý 1 trận đấu
 class GameInstance {
@@ -38,6 +40,7 @@ class GameInstance {
             this.gameLogic = new GameLogic(this.matchInfo);
             this.gameLogic.startMatch();
             console.log(`GameLogic started for match ${matchId}`);
+            this._initReplay(blueTeamData, redTeamData);
             
             console.log(`Game instance created successfully for match ${matchId}`);
         } catch (error) {
@@ -51,6 +54,7 @@ class GameInstance {
         if (!this.players.includes(playerId)) {
             this.players.push(playerId);
             console.log(`Player ${playerId} added to game ${this.matchId}`);
+            this._syncReplayPlayers();
         }
     }
     
@@ -89,122 +93,38 @@ class GameInstance {
                 }
             }
             
+            // Replay input is taken before oldPosition / deathAnalysis are attached.
+            const replayEntry = toReplayEntry(action, actionData);
+
             // 🔧 PHASE 1: Capture pre-action snapshot for death analysis
             const preActionSnapshot = this.captureUnitsSnapshot(action, actionData);
-            
-            // Process action through game logic
-            let result;
-            switch (action) {
-                case 'move_unit':
-                    // Find the actual unit in gameLogic.matchInfo by ID
-                    const unitToMove = this.findUnitById(actionData.unit.id);
-                    if (!unitToMove) {
-                        console.log(`❌ Unit with id ${actionData.unit.id} not found`);
-                        return { success: false, error: 'Unit not found' };
-                    }
-                    
-                    // Store old position for action tracking
-                    const oldPosition = { row: unitToMove.row, col: unitToMove.col };
-                    actionData.oldPosition = oldPosition;
-                    
-                    console.log(`🚶 Moving unit ${unitToMove.name} from (${unitToMove.row},${unitToMove.col}) to (${actionData.row},${actionData.col})`);
-                    result = this.gameLogic.makeMove(unitToMove, actionData.row, actionData.col);
-                    console.log(`📍 Unit position after move: (${unitToMove.row},${unitToMove.col})`);
-                    
-                    // Store new position after move for action tracking
-                    if (result) {
-                        actionData.currentPosition = { row: unitToMove.row, col: unitToMove.col };
-                    }
-                    
-                    // Check if unit has any remaining actions after move
-                    if (result && !this.hasAvailableActions(unitToMove)) {
-                        console.log(`🔄 No more actions available for ${unitToMove.name}, advancing turn`);
-                        this.gameLogic.newTurn();
-                    }
-                    break;
-                case 'attack':
-                    const attackingUnit = this.findUnitById(actionData.unit.id);
-                    const targetUnit = this.findUnitById(actionData.target.id);
-                    if (!attackingUnit || !targetUnit) {
-                        return { success: false, error: 'Unit not found' };
-                    }
-                    console.log(`⚔️ ${attackingUnit.name} attacking ${targetUnit.name}`);
-                    result = this.gameLogic.makeAttack(attackingUnit, targetUnit);
-                    if (result) {
-                        console.log(`🔄 Attack completed, advancing turn`);
-                        this.gameLogic.newTurn();
-                    }
-                    break;
-                case 'heal':
-                    const healingUnit = this.findUnitById(actionData.unit.id);
-                    const healTarget = this.findUnitById(actionData.target.id);
-                    if (!healingUnit || !healTarget) {
-                        return { success: false, error: 'Unit not found' };
-                    }
-                    console.log(`💚 ${healingUnit.name} healing ${healTarget.name}`);
-                    result = this.gameLogic.makeHeal(healingUnit, healTarget);
-                    if (result) {
-                        console.log(`🔄 Heal completed, advancing turn`);
-                        this.gameLogic.newTurn();
-                    }
-                    break;
-                case 'sacrifice':
-                    const sacrificingUnit = this.findUnitById(actionData.unit.id);
-                    const sacrificeTarget = this.findUnitById(actionData.target.id);
-                    if (!sacrificingUnit || !sacrificeTarget) {
-                        return { success: false, error: 'Unit not found' };
-                    }
-                    console.log(`🩸 ${sacrificingUnit.name} sacrificing for ${sacrificeTarget.name}`);
-                    result = this.gameLogic.makeSacrifice(sacrificingUnit, sacrificeTarget);
-                    if (result) {
-                        console.log(`🔄 Sacrifice completed, advancing turn`);
-                        this.gameLogic.newTurn();
-                    }
-                    break;
-                case 'suicide':
-                    const suicideUnit = this.findUnitById(actionData.unit.id);
-                    if (!suicideUnit) {
-                        return { success: false, error: 'Unit not found' };
-                    }
-                    console.log(`🔥 ${suicideUnit.name} committing suicide`);
-                    result = this.gameLogic.makeSuicide(suicideUnit);
-                    if (result) {
-                        console.log(`🔄 Suicide completed, advancing turn`);
-                        this.gameLogic.newTurn();
-                    }
-                    break;
-                case 'end_turn':
-                    // End turn logic (similar to play-with-ai.js)
-                    console.log(`🏁 Player manually ending turn`);
-                    
-                    if (this.gameLogic.currentTurnUnit === null) {
-                        // Nếu current unit là null, đưa 1 quân bất kỳ của team hiện tại vào alreadyEndedTurnUnits
-                        const currentTeam = this.gameLogic.matchInfo.team1.teamId === this.gameLogic.currentTurnTeamId ? 
-                                          this.gameLogic.matchInfo.team1 : this.gameLogic.matchInfo.team2;
-                        
-                        // Tìm unit đầu tiên có thể chọn (alive, không phải Base, chưa ended turn)
-                        const availableUnit = currentTeam.units.find(unit => 
-                            unit.hp > 0 && 
-                            unit.name !== "Base" && 
-                            !this.gameLogic.alreadyEndedTurnUnits.includes(unit)
-                        );
-                        
-                        if (availableUnit) {
-                            this.gameLogic.alreadyEndedTurnUnits.push(availableUnit);
-                            console.log(`Added ${availableUnit.name} to alreadyEndedTurnUnits`);
-                        }
-                    } else {
-                        // Nếu current unit đã có, xử lý end turn bình thường
-                        this.gameLogic.endTurn();
-                    }
-                    
-                    // Chuyển sang turn tiếp theo
-                    this.gameLogic.newTurn();
-                    result = true;
-                    break;
-                default:
-                    console.log(`❌ Unknown action: ${action}`);
-                    return { success: false, error: 'Unknown action' };
+
+            if ((action === 'move_unit' || action === 'move') && actionData?.unit?.id) {
+                const unitToMove = this.findUnitById(actionData.unit.id);
+                if (!unitToMove) {
+                    console.log(`❌ Unit with id ${actionData.unit.id} not found`);
+                    return { success: false, error: 'Unit not found' };
+                }
+                actionData.oldPosition = { row: unitToMove.row, col: unitToMove.col };
+                console.log(`🚶 Moving unit ${unitToMove.name} from (${unitToMove.row},${unitToMove.col}) to (${actionData.row},${actionData.col})`);
+            } else if (action === 'end_turn') {
+                console.log(`🏁 Player manually ending turn`);
+            }
+
+            const applied = applyLoggedAction(this.gameLogic, replayEntry);
+            const result = applied.ok;
+
+            if (result && (action === 'move_unit' || action === 'move') && actionData?.unit?.id) {
+                const movedUnit = this.findUnitById(actionData.unit.id);
+                if (movedUnit) {
+                    actionData.currentPosition = { row: movedUnit.row, col: movedUnit.col };
+                    console.log(`📍 Unit position after move: (${movedUnit.row},${movedUnit.col})`);
+                }
+            }
+
+            if (!result) {
+                console.log(`❌ Action ${action} failed in game logic${applied.error ? `: ${applied.error}` : ''}`);
+                return { success: false, error: applied.error || 'Action failed' };
             }
             
             // 🔧 STEP 2: Enhanced analysis after action execution
@@ -232,7 +152,8 @@ class GameInstance {
             
             if (result) {
                 console.log(`✅ Action ${action} processed successfully`);
-                
+                if (isLoggedAction(replayEntry.action)) this._appendReplay(replayEntry);
+
                 // Check if game ended
                 const gameEndResult = this.gameLogic.isGameEnd();
                 if (gameEndResult !== 0) {
@@ -596,6 +517,7 @@ class GameInstance {
         this.status = 'finished';
         this.winner = winner;
         this.endedAt = new Date();
+        this._finishReplay(this._replayWinner(winner));
         
         console.log(`Game ${this.matchId} ended. Winner: ${winner}`);
     }
@@ -616,8 +538,94 @@ class GameInstance {
         };
         
         console.log(`Game ${this.matchId} ended by forfeit. Winner: ${winnerPlayerId} (${winnerTeam} team)`);
+        this._finishReplay(this._replayWinner(this.winner));
         
         return this.winner;
+    }
+
+    _initReplay(blueTeamData, redTeamData) {
+        this.replay = {
+            version: 1,
+            matchId: String(this.matchId),
+            source: 'pvp',
+            createdAt: this.createdAt.toISOString(),
+            endedAt: null,
+            players: [],
+            teams: {
+                blue: { hero: blueTeamData.hero, units: [...blueTeamData.units] },
+                red: { hero: redTeamData.hero, units: [...redTeamData.units] }
+            },
+            actions: [],
+            winner: null
+        };
+        this._writeReplay();
+    }
+
+    _playerRecords() {
+        let stored = [];
+        try {
+            stored = this.serverGameManager?.service?.store?.getMatchPlayers(this.matchId) || [];
+        } catch {
+            stored = [];
+        }
+        return this.players.map((userId, index) => {
+            const storedPlayer = stored.find(player => player.userId === userId);
+            let team = index === 0 ? 'blue' : 'red';
+            if (storedPlayer?.team?.teamId === 'blue' || storedPlayer?.team?.teamId === 'red') {
+                team = storedPlayer.team.teamId;
+            } else {
+                try { team = this.getPlayerTeam(userId); } catch { /* keep index fallback */ }
+            }
+            return {
+                userId,
+                username: storedPlayer?.username || storedPlayer?.name || userId,
+                team: team === 'red' ? 'red' : 'blue'
+            };
+        });
+    }
+
+    _replayWinner(winner) {
+        if (winner === 1) return 'blue';
+        if (winner === 2) return 'red';
+        if (winner === 3) return 'draw';
+        if (winner && typeof winner === 'object') {
+            return {
+                team: winner.teamId === 'red' ? 'red' : 'blue',
+                playerId: winner.playerId || null,
+                reason: winner.reason || 'forfeit'
+            };
+        }
+        return winner ?? null;
+    }
+
+    _syncReplayPlayers() {
+        if (!this.replay) return;
+        this.replay.players = this._playerRecords();
+        this._writeReplay();
+    }
+
+    _appendReplay(entry) {
+        if (!this.replay || !entry) return;
+        this.replay.actions.push(entry);
+        this.replay.players = this._playerRecords();
+        this._writeReplay();
+    }
+
+    _finishReplay(winner) {
+        if (!this.replay) return;
+        this.replay.winner = winner;
+        this.replay.endedAt = (this.endedAt instanceof Date ? this.endedAt : new Date()).toISOString();
+        this.replay.players = this._playerRecords();
+        this._writeReplay();
+    }
+
+    _writeReplay() {
+        if (!this.replay) return;
+        try {
+            saveReplay(this.replay);
+        } catch (error) {
+            console.error(`Replay write failed for ${this.matchId}:`, error.message);
+        }
     }
     
     // Cleanup resources

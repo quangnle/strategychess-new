@@ -4,7 +4,7 @@ import MatchInfo from '/core-logic/match-info.js';
 import GameLogic from '/core-logic/game-logic.js';
 import Processor from '/ai-processor/processor.js';
 import { AIDriver, AI_MODE } from './ai-driver.js';
-import { mountCanvas, loadImages, drawImage, rgba, fillTriangle, strokeCircle } from './canvas-2d.js';
+import { mountCanvas, loadImages, drawImage, rgba, fillTriangle, strokeCircle, drawHpHearts, drawActedMarker, unitHasActed } from './canvas-2d.js';
 
 class BattleGraphics {
     constructor(matchInfo, aiOptions = {}) {
@@ -16,11 +16,16 @@ class BattleGraphics {
         this.processor = new Processor(this.gameLogic);
 
         this.onHudUpdate = aiOptions.onHudUpdate || (() => {});
+        this.onReplayActions = aiOptions.onReplayActions || (() => {});
+        this.onGameEnd = aiOptions.onGameEnd || (() => {});
+        this.replayMode = !!aiOptions.replay;
+        this._reportedEnd = false;
         this.ai = new AIDriver(this.gameLogic, {
             mode: aiOptions.mode || AI_MODE.OFF,
             timeMs: aiOptions.timeMs ?? 3000,
             autoPlay: aiOptions.autoPlay ?? true,
             onMoveApplied: (trace) => { this.recentActions = trace; },
+            onLoggedActions: (entries) => this._logReplay(entries),
             onUpdate: (driver) => {
                 if (aiOptions.onUpdate) aiOptions.onUpdate(driver);
             }
@@ -83,6 +88,7 @@ class BattleGraphics {
 
         this._onPointer = (e) => {
             e.preventDefault();
+            if (this.replayMode) return;
             const result = this.gameLogic.isGameEnd();
             if (result !== 0) {
                 this.drawGameEndInfoBoard(result);
@@ -94,6 +100,7 @@ class BattleGraphics {
         this.host.canvas.addEventListener('pointerdown', this._onPointer);
 
         this._onKey = (e) => {
+            if (this.replayMode) return;
             const result = this.gameLogic.isGameEnd();
             if (result !== 0) {
                 this.drawGameEndInfoBoard(result);
@@ -124,13 +131,17 @@ class BattleGraphics {
         ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         const result = this.gameLogic.isGameEnd();
-        if (result !== 0) {
+        if (result !== 0 && !this.replayMode) {
+            if (!this._reportedEnd) {
+                this._reportedEnd = true;
+                try { this.onGameEnd(result); } catch (err) { console.warn('replay end', err); }
+            }
             this.drawGameEndInfoBoard(result);
             this._syncHud();
             return;
         }
 
-        if (this.ai) this.ai.tick();
+        if (this.ai && !this.replayMode) this.ai.tick();
 
         this.drawBoard();
         this.drawUnits();
@@ -203,8 +214,9 @@ class BattleGraphics {
         const x = this.offsetX + unit.col * this.cellSize;
         const y = this.offsetY + unit.row * this.cellSize;
 
+        const acted = unitHasActed(this.gameLogic, unit);
         const canBeSelected = unit.teamId === this.gameLogic.currentTurnTeamId &&
-                             !this.gameLogic.alreadyEndedTurnUnits.includes(unit) &&
+                             !acted &&
                              unit.name !== "Base";
 
         if (canBeSelected) {
@@ -221,25 +233,11 @@ class BattleGraphics {
             const imgX = x + (this.cellSize - imgSize) / 2;
             const imgY = y + (this.cellSize - imgSize) / 2;
             drawImage(ctx, this.images[imageKey], imgX, imgY, imgSize, imgSize);
-            this.drawHPBar(unit, x, y, isBlueTeam);
-            this.drawEffectIndicators(unit, x, y);
         }
-    }
-
-    drawHPBar(unit, x, y, isBlueTeam) {
-        const ctx = this.ctx;
-        const barWidth = this.cellSize * 0.8;
-        const barHeight = 4;
-        const barX = x + (this.cellSize - barWidth) / 2;
-        const barY = y + 2;
-
-        ctx.fillStyle = rgba(102);
-        ctx.fillRect(barX, barY, barWidth, barHeight);
-
-        const hpPercentage = unit.hp / (UNIT_TYPES[unit.armyType]?.hp || 5);
-        const hpWidth = barWidth * hpPercentage;
-        ctx.fillStyle = isBlueTeam ? rgba(0, 0, 255) : rgba(255, 0, 0);
-        ctx.fillRect(barX, barY, hpWidth, barHeight);
+        if (acted) drawActedMarker(ctx, x, y, this.cellSize, this.cellSize);
+        const maxHp = UNIT_TYPES[unit.name]?.hp || UNIT_TYPES[unit.armyType]?.hp || unit.hp || 1;
+        drawHpHearts(ctx, x, y, this.cellSize, this.cellSize, unit.hp, maxHp);
+        this.drawEffectIndicators(unit, x, y);
     }
 
     drawEffectIndicators(unit, x, y) {
@@ -275,14 +273,16 @@ class BattleGraphics {
 
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
 
         const angle = Math.atan2(y2 - y1, x2 - x1);
-        const arrowSize = 10;
+        const arrowSize = 22;
         const x3 = x2 - arrowSize * Math.cos(angle - Math.PI / 6);
         const y3 = y2 - arrowSize * Math.sin(angle - Math.PI / 6);
         const x4 = x2 - arrowSize * Math.cos(angle + Math.PI / 6);
@@ -343,16 +343,16 @@ class BattleGraphics {
         this.recentActions.forEach(action => {
             switch (action.type) {
                 case 'move':
-                    this.drawArrowIndicator(action.from, action.to, rgba(0, 255, 0, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(0, 255, 0, 220));
                     break;
                 case 'attack':
-                    this.drawArrowIndicator(action.from, action.to, rgba(255, 0, 0, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(255, 0, 0, 230));
                     break;
                 case 'heal':
-                    this.drawArrowIndicator(action.from, action.to, rgba(0, 0, 255, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(0, 0, 255, 220));
                     break;
                 case 'sacrifice':
-                    this.drawArrowIndicator(action.from, action.to, rgba(255, 255, 0, 128));
+                    this.drawArrowIndicator(action.from, action.to, rgba(255, 255, 0, 230));
                     break;
                 case 'stay':
                 case 'pass':
@@ -459,6 +459,7 @@ class BattleGraphics {
                 console.log(`Unit moved to (${row}, ${col})`);
                 this.recentActions = [];
                 this.recentActions.push({ type: 'move', from: oldCell, to: { row, col } });
+                this._logReplay([{ action: 'move', unitId: currentUnit.id, row, col }]);
 
                 const canAttack = this.gameLogic.getAttackableTargets(currentUnit).length > 0;
                 const canHeal = this.gameLogic.getHealableTargets(currentUnit).length > 0;
@@ -477,6 +478,7 @@ class BattleGraphics {
             const suicideSuccess = this.gameLogic.makeSuicide(currentUnit);
             if (suicideSuccess) {
                 console.log('Suicide executed');
+                this._logReplay([{ action: 'suicide', unitId: currentUnit.id }]);
                 const result = this.gameLogic.isGameEnd();
                 if (result !== 0) {
                     this.drawGameEndInfoBoard(result);
@@ -500,6 +502,7 @@ class BattleGraphics {
                     from: { row: currentUnit.row, col: currentUnit.col },
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
+                this._logReplay([{ action: 'attack', unitId: currentUnit.id, targetId: clickedUnit.id }]);
                 const result = this.gameLogic.isGameEnd();
                 if (result !== 0) {
                     this.drawGameEndInfoBoard(result);
@@ -523,6 +526,7 @@ class BattleGraphics {
                     from: { row: currentUnit.row, col: currentUnit.col },
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
+                this._logReplay([{ action: 'heal', unitId: currentUnit.id, targetId: clickedUnit.id }]);
                 this.gameLogic.endTurn();
                 this.gameLogic.newTurn();
             }
@@ -541,6 +545,7 @@ class BattleGraphics {
                     from: { row: currentUnit.row, col: currentUnit.col },
                     to: { row: clickedUnit.row, col: clickedUnit.col }
                 });
+                this._logReplay([{ action: 'sacrifice', unitId: currentUnit.id, targetId: clickedUnit.id }]);
                 console.log('Sacrifice executed, switching to next turn');
                 this.gameLogic.newTurn();
             }
@@ -563,6 +568,11 @@ class BattleGraphics {
             if (this.ai) this.ai.setAutoPlay(!this.ai.autoPlay);
             return;
         }
+    }
+
+    _logReplay(entries) {
+        if (this.replayMode || !entries || !entries.length) return;
+        try { this.onReplayActions(entries); } catch (err) { console.warn('replay log', err); }
     }
 
     destroy() {

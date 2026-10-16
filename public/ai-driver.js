@@ -6,6 +6,7 @@
 // nghĩ, nên thời gian nghĩ được giảm xuống.
 
 import { snapshotFromGameLogic } from '/ai-processor/search/search-state.js';
+import { hasFollowUpActions } from '/core-logic/replay-actions.js';
 import { t } from './i18n.js';
 
 export const AI_MODE = {
@@ -35,6 +36,7 @@ export class AIDriver {
         this.status = 'sẵn sàng';
         this.onUpdate = options.onUpdate || (() => { });
         this.onMoveApplied = options.onMoveApplied || (() => { });
+        this.onLoggedActions = options.onLoggedActions || (() => { });
 
         this._requestId = 0;
         this._pending = null;
@@ -173,6 +175,7 @@ export class AIDriver {
         const gl = this.gameLogic;
         if (!plan) {
             gl.passTurn();
+            this.onLoggedActions([{ action: 'end_turn' }]);
             this.onMoveApplied([]);
             if (gl.isGameEnd() === 0) gl.newTurn();
             return;
@@ -182,6 +185,7 @@ export class AIDriver {
         const unit = all.find(u => u.id === plan.unitId);
         if (!unit) {
             gl.passTurn();
+            this.onLoggedActions([{ action: 'end_turn' }]);
             this.onMoveApplied([]);
             if (gl.isGameEnd() === 0) gl.newTurn();
             return;
@@ -189,14 +193,19 @@ export class AIDriver {
 
         gl.currentTurnUnit = unit;
         const trace = [];
+        const logged = [];
         const from = { row: unit.row, col: unit.col };
+        let moved = false;
 
         if (plan.dest) {
             if (gl.makeMove(unit, plan.dest.row, plan.dest.col)) {
+                moved = true;
                 trace.push({ type: 'move', from, to: { row: plan.dest.row, col: plan.dest.col } });
+                logged.push({ action: 'move', unitId: unit.id, row: plan.dest.row, col: plan.dest.col });
             }
         }
 
+        let acted = false;
         if (plan.action) {
             const target = plan.action.targetId ? all.find(u => u.id === plan.action.targetId) : null;
             const here = { row: unit.row, col: unit.col };
@@ -209,8 +218,22 @@ export class AIDriver {
                 case 'suicide': ok = gl.makeSuicide(unit); break;
                 default: break;
             }
-            if (ok) trace.push({ type: plan.action.type, from: here, to });
+            if (ok) {
+                acted = true;
+                trace.push({ type: plan.action.type, from: here, to });
+                const entry = { action: plan.action.type, unitId: unit.id };
+                if (plan.action.targetId && plan.action.type !== 'suicide') entry.targetId = plan.action.targetId;
+                logged.push(entry);
+            }
         }
+
+        // A lone move ends the turn on the server only when nothing else is legal.
+        // The AI always advances, so record an explicit end_turn when actions remain.
+        if (moved && !acted && hasFollowUpActions(gl, unit)) {
+            logged.push({ action: 'end_turn', unitId: unit.id });
+        }
+        if (!logged.length) logged.push({ action: 'end_turn', unitId: unit.id });
+        this.onLoggedActions(logged);
 
         if (!gl.currentTurnUnit) gl.currentTurnUnit = unit;
 
