@@ -10,6 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Nginx terminates TLS and proxies plain HTTP. Trust X-Forwarded-* so
+// req.protocol is https when the proxy says so.
+app.set('trust proxy', 1);
 const server = createServer(app);
 const io = new Server(server, {
     cors: {
@@ -20,11 +23,40 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 const isDebug = process.argv.includes('--inspect') || process.argv.includes('--inspect-brk');
+const TLS_ONLY_HOSTS = new Set(['strategychess.online', 'www.strategychess.online']);
 
 function publicOrigin(req) {
-    if (process.env.PUBLIC_ORIGIN) return process.env.PUBLIC_ORIGIN.replace(/\/$/, '');
-    const proto = String(req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
-    const host = String(req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`).split(',')[0].trim();
+    if (process.env.PUBLIC_ORIGIN) {
+        return process.env.PUBLIC_ORIGIN
+            .replace(/\/$/, '')
+            .replace(/^http:\/\/([^/?#]+):443(?=\/|$)/i, 'https://$1');
+    }
+
+    let proto = String(req.get('x-forwarded-proto') || req.protocol || 'http')
+        .split(',')[0]
+        .trim()
+        .toLowerCase()
+        .replace(/:$/, '');
+    if (proto !== 'http' && proto !== 'https') proto = 'http';
+
+    let host = String(req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`)
+        .split(',')[0]
+        .trim();
+
+    const hostname = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+    const port = (host.match(/:(\d+)$/) || [])[1]
+        || String(req.get('x-forwarded-port') || '').split(',')[0].trim();
+
+    // Live nginx forwards Host: strategychess.online:443 and does not send
+    // X-Forwarded-Proto. Express then sees plain HTTP and would emit
+    // http://strategychess.online:443/ . Facebook refetches og:url, sends
+    // cleartext to port 443, and nginx returns
+    // "400 The plain HTTP request was sent to HTTPS port".
+    if (port === '443' || TLS_ONLY_HOSTS.has(hostname)) proto = 'https';
+
+    if (proto === 'https') host = host.replace(/:443$/, '');
+    else host = host.replace(/:80$/, '');
+
     return `${proto}://${host}`;
 }
 
