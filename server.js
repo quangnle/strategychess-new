@@ -21,7 +21,7 @@ const io = new Server(server, {
     }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3999;
 const isDebug = process.argv.includes('--inspect') || process.argv.includes('--inspect-brk');
 const TLS_ONLY_HOSTS = new Set(['strategychess.online', 'www.strategychess.online']);
 
