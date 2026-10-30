@@ -19,6 +19,7 @@ class BattleGraphics {
         this.onReplayActions = aiOptions.onReplayActions || (() => {});
         this.onGameEnd = aiOptions.onGameEnd || (() => {});
         this.replayMode = !!aiOptions.replay;
+        this.viewerTeamId = aiOptions.viewerTeam || null;
         this._reportedEnd = false;
         this.ai = new AIDriver(this.gameLogic, {
             mode: aiOptions.mode || AI_MODE.OFF,
@@ -236,7 +237,11 @@ class BattleGraphics {
         }
         if (acted) drawActedMarker(ctx, x, y, this.cellSize, this.cellSize);
         const maxHp = UNIT_TYPES[unit.name]?.hp || UNIT_TYPES[unit.armyType]?.hp || unit.hp || 1;
-        drawHpHearts(ctx, x, y, this.cellSize, this.cellSize, unit.hp, maxHp);
+        const teamId = isBlueTeam ? 'blue' : 'red';
+        const heartSide = this.viewerTeamId === 'red'
+            ? (teamId === 'red' ? 'blue' : 'red')
+            : teamId;
+        drawHpHearts(ctx, x, y, this.cellSize, this.cellSize, unit.hp, maxHp, heartSide);
         this.drawEffectIndicators(unit, x, y);
     }
 

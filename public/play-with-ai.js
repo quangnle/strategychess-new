@@ -673,6 +673,7 @@ function initializeBattleGraphics(matchInfo) {
         battleGraphics = new P5BattleGraphics(matchInfo, {
             mode: aiSettings.mode,
             timeMs: aiSettings.timeMs,
+            viewerTeam: playerTeamColor(),
             autoPlay: true,
             onUpdate: updateAiStatusLine,
             onHudUpdate: renderBattleHud,

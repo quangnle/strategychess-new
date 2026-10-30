@@ -1002,7 +1002,7 @@ class BattleGraphicsMultiplayer {
         }
         const unitType = UNIT_TYPES[unit.name] || UNIT_TYPES[unit.armyType || unit.name];
         const maxHp = unitType ? unitType.hp : (unit.hp || 1);
-        drawHpHearts(ctx, x, y, this.cellWidth, this.cellHeight, unit.hp, maxHp);
+        drawHpHearts(ctx, x, y, this.cellWidth, this.cellHeight, unit.hp, maxHp, isPlayerUnit ? 'blue' : 'red');
         this.drawEffectIndicators(unit, x, y);
     }
     
